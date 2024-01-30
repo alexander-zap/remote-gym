@@ -1,0 +1,16 @@
+{
+  "CN": "Remote Environment Cert",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "Example Country",
+      "L": "Example Locality",
+      "O": "Example Organization",
+      "OU": "CertificateAuthority",
+      "ST": "Example State"
+    }
+  ]
+}

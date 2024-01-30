@@ -1,0 +1,98 @@
+[tool.poetry]
+name = "remote-gym"
+version = "0.1.0"
+description = "This is a module to run Gym environments remotely, to enable splitting environment hosting and agent training into separate processes (or even separate machines)."
+authors = ["Alexander Zap"]
+license = "Proprietary"
+packages = [
+    { include = "remote-gym", from = "src" },
+]
+include = ["remote-gym/res/*"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+setuptools = "^69.0"
+numpy = "~1.23.0"
+gymnasium = {extras = ["box2d"], version = "^0.29.1"}
+protobuf = "~3.20"
+dm-env-rpc = "^1.1.6"
+tqdm = "^4.66.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.11"
+pre-commit = "^3.5"
+pytest = "^7.2"
+pytest-cov = "^4.0"
+jupyterlab = "^4.0"
+ruff = "^0.1.6"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+select = ["E", "F"]
+ignore = []
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
+unfixable = []
+
+# Skip unused import rule.
+extend-ignore = ["F401"]
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+per-file-ignores = { }
+
+# Same as Black.
+line-length = 120
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Assume Python 3.8.
+target-version = "py38"
+
+[tool.ruff.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10
+
+[tool.black]
+line-length = 120
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''

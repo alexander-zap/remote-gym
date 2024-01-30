@@ -1,0 +1,22 @@
+{
+  "CN": "Remote Environment Hosting Server",
+  "hosts": [
+    "ENTER_ENVIRONMENT_HOSTING_SERVER_IP_HERE",
+    "0.0.0.0",
+    "127.0.0.1",
+    "localhost"
+  ],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "Example Country",
+      "L": "Example Locality",
+      "O": "Example Organization",
+      "OU": "SRE-Operations",
+      "ST": "Example State"
+    }
+  ]
+}
