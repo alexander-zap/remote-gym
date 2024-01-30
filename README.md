@@ -1,11 +1,17 @@
 # remote-gym: Hosting Gym-environments remotely
 
-This is a module to run Gym environments remotely, to enable splitting environment hosting and agent training into separate processes (or even separate machines). Communication between the two processes is executed by using TLS and the gRPC protocol.
+This is a module to run Gym environments remotely, to enable splitting environment hosting and agent training into separate processes (or even separate machines).
+Communication between the two processes is executed by using TLS and the gRPC protocol.
+
+Adapted `dm_env_rpc` for `Gym.env` environments.
+
+
+
 
 ### Main Features
 - Use the `start_as_remote_environment` method to convert a `Gym.env` environment into a remotely running environment.
 - Use the `RemoteEnvironment` class to manage the connection to a remotely running environment and providing the standardized `Gym.env` interface to your agents.
-
+- Basically: `remote-gym` is to `Gym.env` as what `dm_env_rpc` is to `dm_env`.
 
 ## Set-Up
 
