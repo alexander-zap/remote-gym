@@ -94,13 +94,13 @@ class RemoteEnvironment(Env):
                     else:
                         # different min and max for every element
                         return Box(
-                            low=_min + np.zeros(spec.shape),
-                            high=_max + np.zeros(spec.shape),
+                            low=_min + np.zeros(shape=spec.shape, dtype=spec.dtype),
+                            high=_max + np.zeros(shape=spec.shape, dtype=spec.dtype),
                             shape=spec.shape,
                             dtype=spec.dtype,
                         )
                 elif isinstance(spec, specs.Array):
-                    return Box(-np.inf, np.inf, shape=spec.shape)
+                    return Box(-np.inf, np.inf, shape=spec.shape, dtype=spec.dtype)
                 else:
                     logging.error(
                         f"Unable to transform dm_env.spec {type(spec)} to Gym space."
