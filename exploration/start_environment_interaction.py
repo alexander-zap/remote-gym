@@ -1,8 +1,8 @@
 import numpy as np
 from tqdm import tqdm
-from util import configure_logging
 
 from remote_gym import RemoteEnvironment
+from remote_gym.util import configure_logging
 
 REMOTE_ENVIRONMENT = False
 URL = "localhost"
