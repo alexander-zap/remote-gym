@@ -7,7 +7,7 @@ license = "Proprietary"
 packages = [
     { include = "remote_gym", from = "src" },
 ]
-include = ["remote_gym/res/*"]
+include = ["src/remote_gym/res/*"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
