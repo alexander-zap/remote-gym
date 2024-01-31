@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "remote-gym"
-version = "0.1.0"
+version = "0.2.0"
 description = "This is a module to run Gym environments remotely, to enable splitting environment hosting and agent training into separate processes (or even separate machines)."
 authors = ["Alexander Zap"]
 license = "Proprietary"
