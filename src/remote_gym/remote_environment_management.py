@@ -1,8 +1,10 @@
 import logging
 from concurrent import futures
-from typing import Optional, Text, Tuple
+from typing import Optional, Text, Tuple, Union
 
 import grpc
+import gym
+import gymnasium
 import numpy as np
 from dm_env_rpc.v1 import (
     dm_env_rpc_pb2,
@@ -11,12 +13,10 @@ from dm_env_rpc.v1 import (
     tensor_spec_utils,
 )
 from google.rpc import code_pb2, status_pb2
-from gymnasium import Env
-from gymnasium.spaces import Box, Discrete, Space
 
 
 def start_as_remote_environment(
-    local_environment: Env,
+    local_environment: Union[gym.Env, gymnasium.Env],
     url: Text,
     port: int,
     server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
@@ -84,14 +84,14 @@ def start_as_remote_environment(
 class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
-    def __init__(self, environment: Env):
+    def __init__(self, environment: Union[gym.Env, gymnasium.Env]):
         self.environment = environment
 
-        def space_to_dtype(space: Space) -> dm_env_rpc_pb2.DataType:
+        def space_to_dtype(space: Union[gym.Space, gymnasium.Space]) -> dm_env_rpc_pb2.DataType:
             """Extract the dm_env_rpc_pb2 data type from the Gym Space.
 
             Args:
-                space: Gymnasium Space object for definition of observation spaces
+                space: Gym or Gymnasium Space object for definition of observation spaces
 
             Returns:
                 dtype of the TensorSpec
@@ -111,18 +111,18 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
             return dtype
 
-        def space_to_bounds(space: Space) -> Tuple:
+        def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
             """Extract the upper and lower bounds of the Gym space.
 
             Args:
-                space: Gymnasium Space object for definition of observation spaces
+                space: Gym or Gymnasium Space object for definition of observation spaces
 
             Returns:
                 Tuple (lower and upper and lower bounds of Gym space in the shape of the Gym shape)
             """
-            if isinstance(space, Discrete):
+            if isinstance(space, gym.spaces.Discrete) or isinstance(space, gymnasium.spaces.Discrete):
                 return space.start, space.start + space.n - 1
-            elif isinstance(space, Box):
+            elif isinstance(space, gym.spaces.Box) or isinstance(space, gymnasium.spaces.Box):
                 return space.low, space.high
             else:
                 logging.error(

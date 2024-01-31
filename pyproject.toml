@@ -13,6 +13,7 @@ include = ["src/remote_gym/res/*"]
 python = "^3.7"
 setuptools = "^68.0"
 gymnasium = "^0.28.1"
+gym = "^0.26.2"
 protobuf = "~3.20"
 dm-env-rpc = "^1.1.6"
 tqdm = "^4.66.1"
