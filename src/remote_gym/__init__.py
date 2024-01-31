@@ -1,2 +1,13 @@
+# Hacky way of supporting Python 3.7, which does not have "Protocol" as part of the "typing" package.
+# "Protocol" is required by "dm_env_rpc.v1.connection".
+try:
+    from typing import Protocol
+except ImportError:
+    import typing
+
+    import typing_extensions
+
+    typing.Protocol = typing_extensions.Protocol
+
 from .remote_environment import RemoteEnvironment
 from .remote_environment_management import start_as_remote_environment
