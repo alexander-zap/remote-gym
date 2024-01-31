@@ -12,7 +12,6 @@ include = ["remote-gym/res/*"]
 [tool.poetry.dependencies]
 python = "^3.8"
 setuptools = "^69.0"
-numpy = "~1.23.0"
 gymnasium = {extras = ["box2d"], version = "^0.29.1"}
 protobuf = "~3.20"
 dm-env-rpc = "^1.1.6"
