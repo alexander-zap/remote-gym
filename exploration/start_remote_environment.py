@@ -1,8 +1,9 @@
 import logging
 
 import gymnasium as gym
-from remote_environment_management import start_as_remote_environment
 from util import configure_logging
+
+from remote_gym import start_as_remote_environment
 
 configure_logging()
 
