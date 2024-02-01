@@ -6,12 +6,42 @@ Communication between the two processes is executed by using TLS and the gRPC pr
 Adapted `dm_env_rpc` for `Gym.env` environments.
 
 
-
+## Usage
 
 ### Main Features
 - Use the `start_as_remote_environment` method to convert a `Gym.env` environment into a remotely running environment.
 - Use the `RemoteEnvironment` class to manage the connection to a remotely running environment and providing the standardized `Gym.env` interface to your agents.
 - Basically: `remote-gym` is to `Gym.env` as what `dm_env_rpc` is to `dm_env`.
+
+### Getting Started
+
+In [this example script](exploration/start_remote_environment.py) you can see how to start a remotely running environment.
+
+In [this accompanying script](exploration/start_environment_interaction.py) you can see how to connect to and interact with the previously started environment from a separate process.
+
+For a quick impression in this README, find a minimal environment hosting and environment interaction example below.
+
+First process:
+```
+server = start_as_remote_environment(
+    url=URL,
+    port=PORT,
+    local_environment=YOUR_GYM_ENVIRONMENT_INSTANCE
+)
+
+server.wait_for_termination()
+```
+
+Second process:
+```
+environment = RemoteEnvironment(url=URL, port=PORT)
+while not done:
+    observation, reward, terminated, truncated, info = environment.step(prev_action)
+    done = terminated or truncated
+    action = environment.action_space.sample()
+    episode_reward += reward
+    prev_action = action
+```
 
 ## Set-Up
 
@@ -26,7 +56,7 @@ Behind the scenes, this creates a virtual environment and installs `remote_gym` 
 You can now import functions and classes from the module with `import remote_gym`.
 
 
-### Support connecting the agent training process to remote environments running on a separate machine
+### Set-up for connecting the agent training process to remote environments running on a separate machine
 Authenticating the communication channel via the connection of one machine to the other requires TLS (formerly SSL)
 authentication.
 This is achieved by using a [self-signed certificate](https://en.wikipedia.org/wiki/Self-signed_certificate),
@@ -75,37 +105,7 @@ All required configuration files to create a self-signed certificate chain can b
 
 
 
-## Getting Started
 
-
-### Example
-
-In [this example script](exploration/start_remote_environment.py) you can how to start a remotely running environment.
-In this
-
-For a quick impression in this README, find a minimal environment hosting and environment interaction example here:
-
-First process:
-```
-server = start_as_remote_environment(
-    url=URL,
-    port=PORT,
-    local_environment=YOUR_GYM_ENVIRONMENT_INSTANCE
-)
-
-server.wait_for_termination()
-```
-
-Second process:
-```
-environment = RemoteEnvironment(url=URL, port=PORT)
-while not done:
-    observation, reward, terminated, truncated, info = environment.step(prev_action)
-    done = terminated or truncated
-    action = environment.action_space.sample()
-    episode_reward += reward
-    prev_action = action
-```
 
 ## Development
 
