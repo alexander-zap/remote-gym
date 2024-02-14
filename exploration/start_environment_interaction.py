@@ -14,7 +14,7 @@ configure_logging()
 
 if __name__ == "__main__":
     # Create instance for managing communication with remotely running environment
-    environment = RemoteEnvironment(url=URL, port=PORT)
+    environment = RemoteEnvironment(url=URL, port=PORT, render_mode="human")
 
     # Print some environment information (observation and action space)
     print("_____OBSERVATION SPACE_____ \n")
@@ -32,6 +32,7 @@ if __name__ == "__main__":
     for episode in tqdm(range(N_EVALUATION_EPISODES)):
         episode_reward = 0
         prev_observation, _ = environment.reset()
+        environment.render()
         prev_action = environment.action_space.sample()
 
         while True:
@@ -42,6 +43,7 @@ if __name__ == "__main__":
                 truncated,
                 info,
             ) = environment.step(prev_action)
+            environment.render()
             done = terminated or truncated
             action = environment.action_space.sample()
             episode_reward += reward

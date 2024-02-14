@@ -10,7 +10,9 @@ configure_logging()
 if __name__ == "__main__":
     example_gym_env = gym.make("Acrobot-v1", render_mode="rgb_array")
 
-    server = start_as_remote_environment(url="localhost", port=56789, local_environment=example_gym_env)
+    server = start_as_remote_environment(
+        url="localhost", port=56789, local_environment=example_gym_env, enable_rendering=True
+    )
 
     try:
         server.wait_for_termination()

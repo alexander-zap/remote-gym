@@ -1,6 +1,7 @@
 import logging
 from typing import Optional, SupportsFloat, Text, Tuple
 
+import cv2
 import grpc
 import numpy as np
 from dm_env import StepType, specs
@@ -54,6 +55,7 @@ class RemoteEnvironment(Env):
         url: Text,
         port: int,
         client_credentials_paths: Optional[Tuple[Text, Optional[Text], Optional[Text]]] = None,
+        render_mode: Text = None,
         *args,
         **kwargs,
     ):
@@ -67,10 +69,17 @@ class RemoteEnvironment(Env):
             url: URL to the machine where the remotely running environment application is hosted on.
             port: Open port on the remote machine (for communication with the remotely running environment application).
             client_credentials_paths (optional; local connection if not provided):
-            Tuple of paths to TSL authentication files
+                Tuple of paths to TSL authentication files:
                 - root_cert_path: Path to TSL root certificate
                 - client_cert_path: Path to TSL client certificate (optional, only for client authentication)
                 - client_private_key_path: Path to TLS client private key (optional, only for client authentication)
+            render_mode: Specified mode of rendering, which is used by the .render method call.
+                Available modes:
+                - None: .render has no effect
+                - “rgb_array” (default): return a single frame representing the current state of the environment.
+                    A frame is a np.ndarray with shape (x, y, 3) representing RGB values for an x-by-y pixel image.
+                - “human”: .render displays the current frame on the current display using cv2
+                NOTE: Rendering is only supported if the remote environment was initiated with `enable_rendering=True`
         """
 
         def convert_to_space(spec: specs.Array) -> Space:
@@ -136,11 +145,11 @@ class RemoteEnvironment(Env):
             self.connection, create_world_settings={}, join_world_settings={}
         )
 
+        # Set local environment attributes retrieved from remote wrapper
         action_spec = self.remote_environment.action_spec()["action"]
         observation_spec = self.remote_environment.observation_spec()["observation"]
         reward_spec = self.remote_environment.reward_spec()
 
-        # Set local environment attributes for remote wrapper
         self._action_space = convert_to_space(action_spec)
         self._observation_space = convert_to_space(observation_spec)
         self._reward_range = (
@@ -149,8 +158,9 @@ class RemoteEnvironment(Env):
             else (-float("inf"), float("inf"))
         )
 
-        # TODO: Render remote environments. Currently not possible.
-        self._render_mode = None
+        # Set local environment attributes for rendering
+        self._render_mode = render_mode
+        self.latest_image = None
 
     def step(self, action, *args, **kwargs) -> Tuple[object, SupportsFloat, bool, bool, dict]:
         """
@@ -159,7 +169,8 @@ class RemoteEnvironment(Env):
         """
         timestep = self.remote_environment.step({"action": action})
 
-        observation = timestep.observation["observation"]
+        observation = timestep.observation.get("observation")
+        self.latest_image = timestep.observation.get("rendering", None)
         reward = timestep.reward
         discount_factor = timestep.discount
         step_type = timestep.step_type
@@ -184,7 +195,8 @@ class RemoteEnvironment(Env):
         """
         timestep = self.remote_environment.reset()
 
-        observation = timestep.observation["observation"]
+        observation = timestep.observation.get("observation")
+        self.latest_image = timestep.observation.get("rendering", None)
 
         return observation, {}
 
@@ -192,7 +204,18 @@ class RemoteEnvironment(Env):
         """
         Renders the environment.
         """
-        # TODO: Render remote environments. Currently not possible.
+        if not self._render_mode:
+            pass
+        elif self._render_mode == "human":
+            if self.latest_image is not None:
+                cv2.imshow("Remote Environment Rendering", self.latest_image)
+                cv2.waitKey(1)
+            else:
+                logging.error("Rendering not possible, no image has been returned yet from the environment.")
+        elif self._render_mode == "rgb_array":
+            return self.latest_image
+        else:
+            raise NotImplementedError
 
     # FIXME: Does not trigger in main-file, investigate.
     def __del__(self):

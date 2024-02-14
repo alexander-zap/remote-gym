@@ -20,31 +20,33 @@ def start_as_remote_environment(
     url: Text,
     port: int,
     server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
+    enable_rendering: bool = False,
 ) -> grpc.Server:
     """
     Method with which every environment can be transformed to a remote one.
     Starts the Catch gRPC server and passes the locally instantiated environment.
     Requires credentials to open a secure server port in gRPC. Needs to match the client authentication.
 
+    NOTE: Use the RemoteEnvironment class to connect to a remotely started environment and provide a gym.Env interface.
+
     Args:
         local_environment: Environment which should be ran remotely on a server.
         url: URL to the machine where the remote environment should be running on.
         port: Port to open (on the remote machine URL) for communication with the remote environment.
         server_credentials_paths (optional; local connection if not provided):
-        Tuple of paths to TSL authentication files
+            Tuple of paths to TSL authentication files:
             - server_cert_path: Path to TSL server certificate
             - server_private_key_path: Path to TLS server private key
             - root_cert_path: Path to TSL root certificate (optional, only for client authentication)
-
-    NOTE: Use the RemoteEnvironment class to connect to a remotely started environment
-        and provide a gym.Env interface to a learning agent.
+        enable_rendering (bool; default False): Flag to enable rendering support for connecting RemoteEnvironments.
+            NOTE: Only supported if the passed `local_environment` has its .render_mode attribute set to "rgb_array".
 
     Returns:
         server: Reference to the gRPC server (for later closing)
 
     """
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
-    servicer = RemoteEnvironmentService(environment=local_environment)
+    servicer = RemoteEnvironmentService(environment=local_environment, enable_rendering=enable_rendering)
     dm_env_rpc_pb2_grpc.add_EnvironmentServicer_to_server(servicer, server)
 
     if server_credentials_paths:
@@ -84,8 +86,9 @@ def start_as_remote_environment(
 class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
-    def __init__(self, environment: Union[gym.Env, gymnasium.Env]):
+    def __init__(self, environment: Union[gym.Env, gymnasium.Env], enable_rendering):
         self.environment = environment
+        self.rendering_enabled = enable_rendering
 
         def space_to_dtype(space: Union[gym.Space, gymnasium.Space]) -> dm_env_rpc_pb2.DataType:
             """Extract the dm_env_rpc_pb2 data type from the Gym Space.
@@ -165,6 +168,22 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
             maximum=self.environment.reward_range[1],
         )
 
+        if self.rendering_enabled:
+            assert self.environment.render_mode == "rgb_array", (
+                "Rendering remote environments is only possible if the `render_mode` attribute "
+                "of the passed environment is 'rgb_array'."
+            )
+            self.environment.reset()
+            render_shape = self.environment.render().shape
+            self.observation_spec.update(
+                {3: dm_env_rpc_pb2.TensorSpec(name="rendering", shape=render_shape, dtype=dm_env_rpc_pb2.UINT8)}
+            )
+            tensor_spec_utils.set_bounds(
+                self.observation_spec[3],
+                minimum=0,
+                maximum=255,
+            )
+
     def Process(self, request_iterator, context):
         """Processes incoming EnvironmentRequests.
 
@@ -221,11 +240,17 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                         observation, reward, terminated, truncated, info = self.environment.step(action)
 
                     response = dm_env_rpc_pb2.StepResponse()
-                    packed_observations = observation_manager.pack({"observation": observation, "reward": reward})
+                    response_observations = {"observation": observation, "reward": reward}
+
+                    if self.rendering_enabled:
+                        rendering = self.environment.render()
+                        response_observations.update({"rendering": rendering})
+
+                    packed_response_observations = observation_manager.pack(response_observations)
 
                     for requested_observation in internal_request.requested_observations:
                         response.observations[requested_observation].CopyFrom(
-                            packed_observations[requested_observation]
+                            packed_response_observations[requested_observation]
                         )
                     if terminated or truncated:
                         response.state = dm_env_rpc_pb2.EnvironmentStateType.TERMINATED
@@ -258,5 +283,6 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
             except Exception as e:  # pylint: disable=broad-except
                 environment_response.error.CopyFrom(status_pb2.Status(code=code_pb2.INTERNAL, message=str(e)))
+                raise e
 
             yield environment_response
