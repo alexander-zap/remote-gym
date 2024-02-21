@@ -4,9 +4,9 @@ from tqdm import tqdm
 from remote_gym import RemoteEnvironment
 from remote_gym.util import configure_logging
 
-REMOTE_ENVIRONMENT = False
 URL = "localhost"
 PORT = 56789
+CLIENT_CREDENTIALS_PATHS = ("..\\ssl\\ca.pem", None, None)
 
 N_EVALUATION_EPISODES = 100
 
@@ -14,7 +14,12 @@ configure_logging()
 
 if __name__ == "__main__":
     # Create instance for managing communication with remotely running environment
-    environment = RemoteEnvironment(url=URL, port=PORT, render_mode="human")
+    environment = RemoteEnvironment(
+        url=URL,
+        port=PORT,
+        client_credentials_paths=CLIENT_CREDENTIALS_PATHS,
+        render_mode="human",
+    )
 
     # Print some environment information (observation and action space)
     print("_____OBSERVATION SPACE_____ \n")
