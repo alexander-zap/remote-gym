@@ -117,33 +117,11 @@ class RemoteEnvironment(Env):
                     )
                     raise ValueError
 
-        if client_credentials_paths:
-            root_cert_path, client_cert_path, client_private_key_path = client_credentials_paths
-            root_cert = open(root_cert_path, "rb").read()
-            client_authentication = True if client_private_key_path and client_cert_path else False
+        self.url = url
+        self.port = port
+        self.client_credentials_paths = client_credentials_paths
 
-            client_private_key = open(client_private_key_path, "rb").read() if client_authentication else None
-            client_cert_chain = open(client_cert_path, "rb").read() if client_authentication else None
-
-            client_credentials = grpc.ssl_channel_credentials(
-                root_certificates=root_cert, private_key=client_private_key, certificate_chain=client_cert_chain
-            )
-            logging.info(
-                f"Connecting securely to port on {url}:{port}. "
-                f"Client authentication is {'ATTEMPTED' if client_authentication else 'OMITTED'}."
-            )
-        else:
-            client_credentials = grpc.local_channel_credentials()
-            logging.info(
-                f"Connecting securely to port on {url}:{port}. "
-                f"SSL credentials were not provided, therefore can only connect to local servers."
-            )
-
-        self.connection = dm_env_rpc_connection.create_secure_channel_and_connect(f"{url}:{port}", client_credentials)
-
-        self.remote_environment, self.world_name = dm_env_adaptor.create_and_join_world(
-            self.connection, create_world_settings={}, join_world_settings={}
-        )
+        self.connection, self.remote_environment = self._connect_to_remote_environment()
 
         # Set local environment attributes retrieved from remote wrapper
         action_spec = self.remote_environment.action_spec()["action"]
@@ -217,7 +195,71 @@ class RemoteEnvironment(Env):
         else:
             raise NotImplementedError
 
+    def _connect_to_remote_environment(
+        self,
+    ) -> Tuple[dm_env_adaptor.dm_env_rpc_connection.Connection, dm_env_adaptor.DmEnvAdaptor]:
+        def create_channel_credentials() -> grpc.ChannelCredentials:
+            """Create client credentials based on given paths in self.client_credentials_paths.
+
+            :return: client_credentials (grpc.ChannelCredentials): Credentials used to connect to the remote machine
+                running the actual environment. Returns credentials for localhost, if no paths are specified.
+            """
+            if self.client_credentials_paths:
+                root_cert_path, client_cert_path, client_private_key_path = self.client_credentials_paths
+                root_cert = open(root_cert_path, "rb").read()
+                client_authentication = True if client_private_key_path and client_cert_path else False
+
+                client_private_key = open(client_private_key_path, "rb").read() if client_authentication else None
+                client_cert_chain = open(client_cert_path, "rb").read() if client_authentication else None
+
+                client_credentials = grpc.ssl_channel_credentials(
+                    root_certificates=root_cert, private_key=client_private_key, certificate_chain=client_cert_chain
+                )
+                logging.info(
+                    f"Connecting securely to port on {self.url}:{self.port}. "
+                    f"Client authentication is {'ATTEMPTED' if client_authentication else 'OMITTED'}."
+                )
+            else:
+                client_credentials = grpc.local_channel_credentials()
+                logging.info(
+                    f"Connecting securely to port on {self.url}:{self.port}. "
+                    f"SSL credentials were not provided, therefore can only connect to local servers."
+                )
+
+            return client_credentials
+
+        server_address = f"{self.url}:{self.port}"
+        client_credentials = create_channel_credentials()
+        connection = dm_env_rpc_connection.create_secure_channel_and_connect(server_address, client_credentials)
+        remote_environment, _ = dm_env_adaptor.create_and_join_world(
+            connection, create_world_settings={}, join_world_settings={}
+        )
+        return connection, remote_environment
+
+    def __getstate__(self):
+        """
+        Return state values to be pickled.
+        """
+        state = self.__dict__.copy()
+        # Remove the unpicklable entries
+        del state["connection"]
+        del state["remote_environment"]
+        return state
+
+    def __setstate__(self, state):
+        """
+        Restore state from the unpickled state values.
+
+        This method also re-initializes the connection to the remotely running environment.
+
+        WARNING: Instance is disconnected and reconnected after this method is called.
+        """
+        self.__dict__.update(state)
+        self.connection, self.remote_environment = self._connect_to_remote_environment()
+
     # FIXME: Does not trigger in main-file, investigate.
     def __del__(self):
-        self.remote_environment.close()
-        self.connection.close()
+        if self.remote_environment:
+            self.remote_environment.close()
+        if self.connection:
+            self.connection.close()
