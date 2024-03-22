@@ -140,6 +140,8 @@ class RemoteEnvironment(Env):
         self._render_mode = render_mode
         self.latest_image = None
 
+        self._disconnect_from_remote_environment()
+
     def step(self, action, *args, **kwargs) -> Tuple[object, SupportsFloat, bool, bool, dict]:
         """
         Run one timestep of the environment's dynamics.
@@ -170,7 +172,12 @@ class RemoteEnvironment(Env):
         """
         Resets the environment to an initial state.
         Returns the initial observation.
+
+        NOTE: If no connection to remote environment is active, connection to remote environment is established here.
         """
+        if not self.remote_environment:
+            self.connection, self.remote_environment = self._connect_to_remote_environment()
+
         timestep = self.remote_environment.reset()
 
         observation = timestep.observation.get("observation")
@@ -236,6 +243,14 @@ class RemoteEnvironment(Env):
         )
         return connection, remote_environment
 
+    def _disconnect_from_remote_environment(self):
+        if self.remote_environment:
+            self.remote_environment.close()
+            self.remote_environment = None
+        if self.connection:
+            self.connection.close()
+            self.connection = None
+
     def __getstate__(self):
         """
         Return state values to be pickled.
@@ -255,11 +270,9 @@ class RemoteEnvironment(Env):
         WARNING: Instance is disconnected and reconnected after this method is called.
         """
         self.__dict__.update(state)
-        self.connection, self.remote_environment = self._connect_to_remote_environment()
+        self.remote_environment = None
+        self.connection = None
 
     # FIXME: Does not trigger in main-file, investigate.
     def __del__(self):
-        if self.remote_environment:
-            self.remote_environment.close()
-        if self.connection:
-            self.connection.close()
+        self._disconnect_from_remote_environment()
