@@ -45,7 +45,9 @@ def start_as_remote_environment(
         server: Reference to the gRPC server (for later closing)
 
     """
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+    server = grpc.server(
+        futures.ThreadPoolExecutor(),
+    )
     servicer = RemoteEnvironmentService(environment=local_environment, enable_rendering=enable_rendering)
     dm_env_rpc_pb2_grpc.add_EnvironmentServicer_to_server(servicer, server)
 
