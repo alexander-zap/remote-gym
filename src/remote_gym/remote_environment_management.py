@@ -129,6 +129,10 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                 return space.start, space.start + space.n - 1
             elif isinstance(space, gym.spaces.Box) or isinstance(space, gymnasium.spaces.Box):
                 return space.low, space.high
+            elif isinstance(space, gym.spaces.MultiDiscrete) or isinstance(space, gymnasium.spaces.MultiDiscrete):
+                low = [discrete_space.start for discrete_space in space]
+                high = [discrete_space.start + discrete_space.n - 1 for discrete_space in space]
+                return low, high
             else:
                 logging.error(
                     f"Unexpected space type {type(space)} of space {space}, cannot extract higher and lower bounds."

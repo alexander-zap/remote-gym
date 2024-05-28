@@ -8,7 +8,7 @@ from dm_env import StepType, specs
 from dm_env_rpc.v1 import connection as dm_env_rpc_connection
 from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
-from gymnasium.spaces import Box, Discrete, Space
+from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
 
 
 class RemoteEnvironment(Env):
@@ -85,15 +85,11 @@ class RemoteEnvironment(Env):
         def convert_to_space(spec: specs.Array) -> Space:
             if isinstance(spec, specs.DiscreteArray):
                 return Discrete(n=spec.num_values)
-            # UInt-check required for detecting pixel-based RGB observations (these should be embedded in the Box space)
-            if (
-                isinstance(spec, specs.BoundedArray)
-                and np.issubdtype(spec.dtype, np.integer)
-                and not spec.dtype == np.uint8
-            ):
-                return Discrete(n=spec.maximum - spec.minimum + 1, start=spec.minimum)
-            else:
-                if isinstance(spec, specs.BoundedArray):
+            elif isinstance(spec, specs.BoundedArray):
+                # UInt-check required for detecting pixel-based RGB observations (should be embedded in the Box space)
+                if np.issubdtype(spec.dtype, np.integer) and not spec.dtype == np.uint8:
+                    return MultiDiscrete(spec.maximum + 1)
+                else:
                     _min = spec.minimum
                     _max = spec.maximum
 
@@ -108,14 +104,15 @@ class RemoteEnvironment(Env):
                             shape=spec.shape,
                             dtype=spec.dtype,
                         )
-                elif isinstance(spec, specs.Array):
-                    return Box(-np.inf, np.inf, shape=spec.shape, dtype=spec.dtype)
+            else:
+                if isinstance(spec, specs.Array):
+                    logging.error(f"Unable to transform dm_env.spec {type(spec)} to Gym space.")
+                    # return Box(-np.inf, np.inf, shape=spec.shape, dtype=spec.dtype)
                 else:
-                    logging.error(
-                        f"Unable to transform dm_env.spec {type(spec)} to Gym space."
-                        f"Support for this dm_env.spec type can be added at the location of the raised ValueError."
-                    )
-                    raise ValueError
+                    logging.error(f"{type(spec)} is not a known dm_env.spec.")
+                raise ValueError(
+                    "Unsupported spec. Support for new dm_env.specs can be added at the location of this raised error."
+                )
 
         self.url = url
         self.port = port
