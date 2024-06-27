@@ -52,9 +52,8 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "-r",
         "--render_mode",
-        action="store_true",
+        type=str,
         help="Render mode of the environment being interacted with",
         default=None,
     )
@@ -64,13 +63,14 @@ if __name__ == "__main__":
     url = args.url
     port = args.port
     client_credentials_paths = (args.root_certificate, args.client_certificate, args.client_private_key)
+    render_mode = args.render_mode
 
     # Create instance for managing communication with remotely running environment
     environment = RemoteEnvironment(
         url=url,
         port=port,
         client_credentials_paths=client_credentials_paths if any(client_credentials_paths) else None,
-        render_mode=None,
+        render_mode=render_mode,
     )
 
     # Print some environment information (observation and action space)
