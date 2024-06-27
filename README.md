@@ -23,18 +23,36 @@ For a quick impression in this README, find a minimal environment hosting and en
 
 First process:
 ```
-server = start_as_remote_environment(
-    url=URL,
-    port=PORT,
-    local_environment=YOUR_GYM_ENVIRONMENT_INSTANCE
-)
+    server = start_as_remote_environment(
+        local_environment=example_environment,
+        # IP of the machine hosting the remote environment; can also be 0.0.0.0
+        url=YOUR_SERVER_IP,
+        # port the remote environment should use on the hosting machine
+        port=PORT_FOR_REMOTE_ENVIRONMENT_TO_RUN_ON,
+        # not using a tuple but setting this completely to None is also possible in case only a local connection is required
+        server_credentials_paths=("path/to/server.pem", "path/to/server-key.pem", "optional/path/to/ca.pem"),
+        # can be set to True in case rendering is required, but significantly increases exchanged data and slows down interaction
+        enable_rendering=False,
+    )
 
-server.wait_for_termination()
+    try:
+        server.wait_for_termination()
+    except Exception as e:
+        server.stop(None)
+        logging.exception(e)
 ```
 
 Second process:
 ```
-environment = RemoteEnvironment(url=URL, port=PORT)
+environment = RemoteEnvironment(
+    url=YOUR_SERVER_IP,
+    port=PORT_FOR_REMOTE_ENVIRONMENT_TO_RUN_ON,
+    # not using a tuple but setting this completely to None is also possible in case only a local connection is required
+    client_credentials_paths=("path/to/ca.pem", "optional/path/to/client.pem", "optional/path/to/client-key.pem"),
+    # can be set to "human" or "rgb_array" if `enable_rendering` was set to True in remote environment hosting process
+    render_mode=None,
+)
+
 action = environment.action_space.sample()
 while not done:
     observation, reward, terminated, truncated, info = environment.step(action)
