@@ -10,7 +10,7 @@ Adapted `dm_env_rpc` for `Gym.env` environments.
 
 ### Main Features
 - Use the `start_as_remote_environment` method to convert a `Gym.env` environment into a remotely running environment.
-- Use the `RemoteEnvironment` class to manage the connection to a remotely running environment and providing the standardized `Gym.env` interface to your agents.
+- Use the `RemoteEnvironment` class to manage the connection to a remotely running environment (from `start_as_remote_environment`) and provide the standardized `Gym.env` interface to your agents through a `RemoteEnvironment` object.
 - Basically: `remote-gym` is to `Gym.env` as what `dm_env_rpc` is to `dm_env`.
 
 ### Getting Started
@@ -35,12 +35,12 @@ server.wait_for_termination()
 Second process:
 ```
 environment = RemoteEnvironment(url=URL, port=PORT)
+action = environment.action_space.sample()
 while not done:
-    observation, reward, terminated, truncated, info = environment.step(prev_action)
+    observation, reward, terminated, truncated, info = environment.step(action)
+    episode_reward += reward
     done = terminated or truncated
     action = environment.action_space.sample()
-    episode_reward += reward
-    prev_action = action
 ```
 
 ## Set-Up
@@ -62,7 +62,7 @@ authentication.
 This is achieved by using a [self-signed certificate](https://en.wikipedia.org/wiki/Self-signed_certificate),
 meaning the certificate is not signed by a publicly trusted certificate authority (CA) but by a locally created CA.
 
-See https://github.com/joekottke/python-grpc-ssl for more details.
+> See https://github.com/joekottke/python-grpc-ssl for more details and a more in-depth tutorial on how to create the self-signed certificates.
 
 All required configuration files to create a self-signed certificate chain can be found in the [ssl folder](/ssl).
 
@@ -75,26 +75,18 @@ All required configuration files to create a self-signed certificate chain can b
 
        cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json server-csr.json | cfssljson -bare server
 
-    Make sure to add all known hostnames of the machine hosting the remote environment. You can now test, whether the
-    client is able to connect to the server by running both example scripts.
-   - [`start_remote_environment`](/synthetic_player_experiment_space/start_remote_environment.py) `-u SERVER.IP.HERE -p 56765  --server_certificate path\to\server.pem --server_private_key path\to\server-key.pem`
-   - [`start_agent_training`](/synthetic_player_experiment_space/start_agent_training.py) `-c path/to/config` with the config containing the environment config in following format:
+Make sure to add all known hostnames of the machine hosting the remote environment. You can now test, whether the
+client is able to connect to the server by running both example scripts.
 
-          environment:
-            framework: Remote
-            params:
-              url: SERVER.IP.HERE
-              port: 56765
-              client_credentials_paths:
-              - ..\\ssl\\ca.pem
-              - null
-              - null
+   - [`start_remote_environment`](/exploration/start_remote_environment.py) `-u SERVER.IP.HERE -p 56765  --server_certificate path\to\server.pem --server_private_key path\to\server-key.pem`
+   - [`start_environment_interaction`](/exploration/start_environment_interaction.py) `-u SERVER.IP.HERE -p 56765 --root_certificate path\to\ca.pem`
 
-    If the connection is not successful and the training is not starting, you can investigate on the server
-    (remote environment hosting machine) which IP is unsuccessfully attempting a TLS authentication to your IP by using
-    the [Wireshark tool](https://www.wireshark.org/download.html) with the filter `tcp.flags.reset==1 or tls.alert_message.level`.
 
-    Afterward you can add this IP to your hostnames to the [server SSL config file](/ssl/server-csr.json).
+If the connection is not successful and the training is not starting, you can investigate on the server
+(remote environment hosting machine) which IP is unsuccessfully attempting a TLS authentication to your IP by using
+the [Wireshark tool](https://www.wireshark.org/download.html) with the filter `tcp.flags.reset==1 or tls.alert_message.level`.
+
+Afterward you can add this IP to your hostnames to the [server SSL config file](/ssl/server-csr.json).
 
 
 3. Optional for client authentication on the machine connecting to the remote environment:
@@ -102,6 +94,11 @@ All required configuration files to create a self-signed certificate chain can b
     Create a client certificate (`client.pem`) and respective private key `client-key.pem` by running following command:
 
        cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json client-csr.json | cfssljson -bare client
+
+Then you can use all certificates and keys:
+
+   - [`start_remote_environment`](/exploration/start_remote_environment.py) `-u SERVER.IP.HERE -p 56765  --root_certificate path\to\ca.pem --server_certificate path\to\server.pem --server_private_key path\to\server-key.pem`
+   - [`start_environment_interaction`](/exploration/start_environment_interaction.py) `-u SERVER.IP.HERE -p 56765 --root_certificate path\to\ca.pem --client_certificate path\to\client.pem --client_private_key path\to\client-key.pem`
 
 
 
