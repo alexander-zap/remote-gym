@@ -91,7 +91,7 @@ All required configuration files to create a self-signed certificate chain can b
 
 2. The server certificate (`server.pem`) and respective private key (`server-key.pem`) is created by following command:
 
-       cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json server-csr.json | cfssljson -bare server
+       cfssl gencert -ca="ca.pem" -ca-key="ca-key.pem" -config="ca-config.json" server-csr.json | cfssljson -bare server
 
 Make sure to add all known hostnames of the machine hosting the remote environment. You can now test, whether the
 client is able to connect to the server by running both example scripts.
@@ -111,7 +111,7 @@ Afterward you can add this IP to your hostnames to the [server SSL config file](
 
     Create a client certificate (`client.pem`) and respective private key `client-key.pem` by running following command:
 
-       cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json client-csr.json | cfssljson -bare client
+       cfssl gencert -ca="ca.pem" -ca-key="ca-key.pem" -config="ca-config.json" client-csr.json | cfssljson -bare client
 
 Then you can use all certificates and keys:
 
