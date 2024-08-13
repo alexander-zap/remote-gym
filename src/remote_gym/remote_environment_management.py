@@ -1,6 +1,6 @@
 import logging
 from concurrent import futures
-from typing import Optional, Text, Tuple, Union
+from typing import Optional, Text, Tuple, Union, Callable
 
 import grpc
 import gym
@@ -16,11 +16,11 @@ from google.rpc import code_pb2, status_pb2
 
 
 def start_as_remote_environment(
-    local_environment: Union[gym.Env, gymnasium.Env],
-    url: Text,
-    port: int,
-    server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
-    enable_rendering: bool = False,
+        create_environment: Callable[[], Union[gym.Env, gymnasium.Env]],
+        url: Text,
+        port: int,
+        server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
+        enable_rendering: bool = False,
 ) -> grpc.Server:
     """
     Method with which every environment can be transformed to a remote one.
@@ -30,7 +30,7 @@ def start_as_remote_environment(
     NOTE: Use the RemoteEnvironment class to connect to a remotely started environment and provide a gym.Env interface.
 
     Args:
-        local_environment: Environment which should be ran remotely on a server.
+        create_environment: Environment constructor which should be ran remotely on a server.
         url: URL to the machine where the remote environment should be running on.
         port: Port to open (on the remote machine URL) for communication with the remote environment.
         server_credentials_paths (optional; local connection if not provided):
@@ -48,7 +48,7 @@ def start_as_remote_environment(
     server = grpc.server(
         futures.ThreadPoolExecutor(),
     )
-    servicer = RemoteEnvironmentService(environment=local_environment, enable_rendering=enable_rendering)
+    servicer = RemoteEnvironmentService(create_environment=create_environment, enable_rendering=enable_rendering)
     dm_env_rpc_pb2_grpc.add_EnvironmentServicer_to_server(servicer, server)
 
     if server_credentials_paths:
@@ -85,80 +85,91 @@ def start_as_remote_environment(
     return server
 
 
+def space_to_dtype(space: Union[gym.Space, gymnasium.Space]) -> dm_env_rpc_pb2.DataType:
+    """Extract the dm_env_rpc_pb2 data type from the Gym Space.
+
+    Args:
+        space: Gym or Gymnasium Space object for definition of observation spaces
+
+    Returns:
+        dtype of the TensorSpec
+    """
+    if space.dtype == np.int64:
+        dtype = dm_env_rpc_pb2.INT64
+    elif space.dtype == np.float32:
+        dtype = dm_env_rpc_pb2.FLOAT
+    elif space.dtype == np.uint8:
+        dtype = dm_env_rpc_pb2.UINT8
+    else:
+        logging.error(
+            f"Unexpected dtype {space.dtype} of space {space}, cannot convert to TensorSpec-dtype."
+            f"Support for this dtype can be added at the location of the raised ValueError."
+        )
+        raise ValueError
+
+    return dtype
+
+
+def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
+    """Extract the upper and lower bounds of the Gym space.
+
+    Args:
+        space: Gym or Gymnasium Space object for definition of observation spaces
+
+    Returns:
+        Tuple (lower and upper and lower bounds of Gym space in the shape of the Gym shape)
+    """
+    if isinstance(space, gym.spaces.Discrete) or isinstance(space, gymnasium.spaces.Discrete):
+        return space.start, space.start + space.n - 1
+    elif isinstance(space, gym.spaces.Box) or isinstance(space, gymnasium.spaces.Box):
+        return space.low, space.high
+    elif isinstance(space, gym.spaces.MultiDiscrete) or isinstance(space, gymnasium.spaces.MultiDiscrete):
+        low = [discrete_space.start for discrete_space in space]
+        high = [discrete_space.start + discrete_space.n - 1 for discrete_space in space]
+        return low, high
+    else:
+        logging.error(
+            f"Unexpected space type {type(space)} of space {space}, cannot extract higher and lower bounds."
+            f"Support for this space type can be added at the location of the raised ValueError."
+        )
+        raise ValueError
+
+
 class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
-    def __init__(self, environment: Union[gym.Env, gymnasium.Env], enable_rendering):
-        self.environment = environment
+    def __init__(self, create_environment: Callable[[], Union[gym.Env, gymnasium.Env]], enable_rendering):
+        self.create_environment = create_environment
         self.rendering_enabled = enable_rendering
+        self.environments = {}
 
-        def space_to_dtype(space: Union[gym.Space, gymnasium.Space]) -> dm_env_rpc_pb2.DataType:
-            """Extract the dm_env_rpc_pb2 data type from the Gym Space.
+        self.action_spec = {}
+        self.observation_spec = {}
 
-            Args:
-                space: Gym or Gymnasium Space object for definition of observation spaces
+        environment = self.create_environment()
+        self.lazy_init(environment)
+        environment.close()
 
-            Returns:
-                dtype of the TensorSpec
-            """
-            if space.dtype == np.int64:
-                dtype = dm_env_rpc_pb2.INT64
-            elif space.dtype == np.float32:
-                dtype = dm_env_rpc_pb2.FLOAT
-            elif space.dtype == np.uint8:
-                dtype = dm_env_rpc_pb2.UINT8
-            else:
-                logging.error(
-                    f"Unexpected dtype {space.dtype} of space {space}, cannot convert to TensorSpec-dtype."
-                    f"Support for this dtype can be added at the location of the raised ValueError."
-                )
-                raise ValueError
-
-            return dtype
-
-        def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
-            """Extract the upper and lower bounds of the Gym space.
-
-            Args:
-                space: Gym or Gymnasium Space object for definition of observation spaces
-
-            Returns:
-                Tuple (lower and upper and lower bounds of Gym space in the shape of the Gym shape)
-            """
-            if isinstance(space, gym.spaces.Discrete) or isinstance(space, gymnasium.spaces.Discrete):
-                return space.start, space.start + space.n - 1
-            elif isinstance(space, gym.spaces.Box) or isinstance(space, gymnasium.spaces.Box):
-                return space.low, space.high
-            elif isinstance(space, gym.spaces.MultiDiscrete) or isinstance(space, gymnasium.spaces.MultiDiscrete):
-                low = [discrete_space.start for discrete_space in space]
-                high = [discrete_space.start + discrete_space.n - 1 for discrete_space in space]
-                return low, high
-            else:
-                logging.error(
-                    f"Unexpected space type {type(space)} of space {space}, cannot extract higher and lower bounds."
-                    f"Support for this space type can be added at the location of the raised ValueError."
-                )
-                raise ValueError
-
+    def lazy_init(self, environment: Union[gym.Env, gymnasium.Env]):
         self.action_spec = {
             1: dm_env_rpc_pb2.TensorSpec(
                 name="action",
-                shape=self.environment.action_space.shape,
-                dtype=space_to_dtype(self.environment.action_space),
+                shape=environment.action_space.shape,
+                dtype=space_to_dtype(environment.action_space),
             )
         }
 
         self.observation_spec = {
             1: dm_env_rpc_pb2.TensorSpec(
                 name="observation",
-                shape=self.environment.observation_space.shape,
-                dtype=space_to_dtype(self.environment.observation_space),
+                shape=environment.observation_space.shape,
+                dtype=space_to_dtype(environment.observation_space),
             ),
             2: dm_env_rpc_pb2.TensorSpec(name="reward", dtype=dm_env_rpc_pb2.FLOAT),
         }
 
-        action_space_bounds = space_to_bounds(self.environment.action_space)
-        observation_space_bounds = space_to_bounds(self.environment.observation_space)
+        action_space_bounds = space_to_bounds(environment.action_space)
+        observation_space_bounds = space_to_bounds(environment.observation_space)
 
         tensor_spec_utils.set_bounds(
             self.action_spec[1], minimum=action_space_bounds[0], maximum=action_space_bounds[1]
@@ -170,17 +181,17 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
         tensor_spec_utils.set_bounds(
             self.observation_spec[2],
-            minimum=self.environment.reward_range[0],
-            maximum=self.environment.reward_range[1],
+            minimum=environment.reward_range[0],
+            maximum=environment.reward_range[1],
         )
 
         if self.rendering_enabled:
-            assert self.environment.render_mode == "rgb_array", (
+            assert environment.render_mode == "rgb_array", (
                 "Rendering remote environments is only possible if the `render_mode` attribute "
                 "of the passed environment is 'rgb_array'."
             )
-            self.environment.reset()
-            render_shape = self.environment.render().shape
+            environment.reset()
+            render_shape = environment.render().shape
             self.observation_spec.update(
                 {3: dm_env_rpc_pb2.TensorSpec(name="rendering", shape=render_shape, dtype=dm_env_rpc_pb2.UINT8)}
             )
@@ -189,6 +200,22 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                 minimum=0,
                 maximum=255,
             )
+
+    def get_environment(self, user: str):
+        if user not in self.environments:
+            raise ValueError(f"Environment for user {user} does not exist.")
+        return self.environments[user]
+
+    def new_environment(self, user: str):
+        self.destroy_environment(user)
+        self.environments[user] = self.create_environment()
+        logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
+
+    def destroy_environment(self, user: str):
+        if user in self.environments:
+            self.environments[user].close()
+            del self.environments[user]
+            logging.info(f"Destroyed environment for user {user} ({len(self.environments)} total active)")
 
     def Process(self, request_iterator, context):
         """Processes incoming EnvironmentRequests.
@@ -225,7 +252,12 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                     environment_should_be_reset = True
                     response = dm_env_rpc_pb2.CreateWorldResponse(world_name="world")
 
+                    self.new_environment(context.peer())
+
                 elif message_type == "join_world":
+                    # Make sure to shutdown when the client leaves
+                    context.add_callback(lambda p=context.peer(): self.destroy_environment(p))
+
                     environment_should_be_reset = True
                     response = dm_env_rpc_pb2.JoinWorldResponse()
                     for uid, action_space in self.action_spec.items():
@@ -234,8 +266,9 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                         response.specs.observations[uid].CopyFrom(observation_space)
 
                 elif message_type == "step":
+                    environment = self.get_environment(context.peer())
                     if environment_should_be_reset:
-                        observation, info = self.environment.reset()
+                        observation, info = environment.reset()
                         reward = 0.0
                         terminated = False
                         truncated = False
@@ -243,13 +276,13 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                     else:
                         unpacked_actions = action_manager.unpack(internal_request.actions)
                         action = unpacked_actions.get("action")
-                        observation, reward, terminated, truncated, info = self.environment.step(action)
+                        observation, reward, terminated, truncated, info = environment.step(action)
 
                     response = dm_env_rpc_pb2.StepResponse()
                     response_observations = {"observation": observation, "reward": reward}
 
                     if self.rendering_enabled:
-                        rendering = self.environment.render()
+                        rendering = self.get_environment(context.peer()).render()
                         response_observations.update({"rendering": rendering})
 
                     packed_response_observations = observation_manager.pack(response_observations)
@@ -273,13 +306,16 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                         response.specs.observations[uid].CopyFrom(observation_space)
 
                 elif message_type == "reset_world":
+                    self.new_environment(context.peer())
                     environment_should_be_reset = True
                     response = dm_env_rpc_pb2.ResetWorldResponse()
 
                 elif message_type == "leave_world":
+                    self.destroy_environment(context.peer())
                     response = dm_env_rpc_pb2.LeaveWorldResponse()
 
                 elif message_type == "destroy_world":
+                    self.destroy_environment(context.peer())
                     response = dm_env_rpc_pb2.DestroyWorldResponse()
 
                 else:
@@ -288,6 +324,7 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                 getattr(environment_response, message_type).CopyFrom(response)
 
             except Exception as e:  # pylint: disable=broad-except
+                # noinspection PyUnresolvedReferences
                 environment_response.error.CopyFrom(status_pb2.Status(code=code_pb2.INTERNAL, message=str(e)))
                 raise e
 
