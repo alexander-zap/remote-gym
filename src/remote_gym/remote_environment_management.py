@@ -16,11 +16,11 @@ from google.rpc import code_pb2, status_pb2
 
 
 def start_as_remote_environment(
-        create_environment: Callable[[], Union[gym.Env, gymnasium.Env]],
-        url: Text,
-        port: int,
-        server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
-        enable_rendering: bool = False,
+    create_environment: Callable[[], Union[gym.Env, gymnasium.Env]],
+    url: Text,
+    port: int,
+    server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
+    enable_rendering: bool = False,
 ) -> grpc.Server:
     """
     Method with which every environment can be transformed to a remote one.
@@ -135,6 +135,35 @@ def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
         raise ValueError
 
 
+class LazyResetEnvWrapper:
+    def __init__(
+        self,
+        environment: Union[gym.Env, gymnasium.Env],
+    ):
+        self.environment = environment
+        self.should_reset = True
+
+    def close(self):
+        self.environment.close()
+
+    def step(self, action, rendering_enabled: bool):
+        if self.should_reset:
+            observation, info = self.environment.reset()
+            reward = 0.0
+            terminated = False
+            truncated = False
+            self.should_reset = False
+        else:
+            observation, reward, terminated, truncated, info = self.environment.step(action)
+
+        rendering = self.environment.render() if rendering_enabled else None
+
+        return observation, reward, terminated, truncated, info, rendering
+
+    def reset(self):
+        self.should_reset = True
+
+
 class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
@@ -208,7 +237,7 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
     def new_environment(self, user: str):
         self.destroy_environment(user)
-        self.environments[user] = self.create_environment()
+        self.environments[user] = LazyResetEnvWrapper(self.create_environment())
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
 
     def destroy_environment(self, user: str):
@@ -238,7 +267,6 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
         action_manager = spec_manager.SpecManager(self.action_spec)
         observation_manager = spec_manager.SpecManager(self.observation_spec)
-        environment_should_be_reset = False
 
         for request in request_iterator:
             environment_response = dm_env_rpc_pb2.EnvironmentResponse()
@@ -249,7 +277,6 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                 logging.debug(f"Received message of type {message_type}.")
 
                 if message_type == "create_world":
-                    environment_should_be_reset = True
                     response = dm_env_rpc_pb2.CreateWorldResponse(world_name="world")
 
                     self.new_environment(context.peer())
@@ -258,7 +285,8 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                     # Make sure to shutdown when the client leaves
                     context.add_callback(lambda p=context.peer(): self.destroy_environment(p))
 
-                    environment_should_be_reset = True
+                    self.get_environment(context.peer()).reset()
+
                     response = dm_env_rpc_pb2.JoinWorldResponse()
                     for uid, action_space in self.action_spec.items():
                         response.specs.actions[uid].CopyFrom(action_space)
@@ -266,23 +294,18 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                         response.specs.observations[uid].CopyFrom(observation_space)
 
                 elif message_type == "step":
+                    unpacked_actions = action_manager.unpack(internal_request.actions)
+                    action = unpacked_actions.get("action")
+
                     environment = self.get_environment(context.peer())
-                    if environment_should_be_reset:
-                        observation, info = environment.reset()
-                        reward = 0.0
-                        terminated = False
-                        truncated = False
-                        environment_should_be_reset = False
-                    else:
-                        unpacked_actions = action_manager.unpack(internal_request.actions)
-                        action = unpacked_actions.get("action")
-                        observation, reward, terminated, truncated, info = environment.step(action)
+                    observation, reward, terminated, truncated, info, rendering = environment.step(
+                        action, self.rendering_enabled
+                    )
 
                     response = dm_env_rpc_pb2.StepResponse()
                     response_observations = {"observation": observation, "reward": reward}
 
                     if self.rendering_enabled:
-                        rendering = self.get_environment(context.peer()).render()
                         response_observations.update({"rendering": rendering})
 
                     packed_response_observations = observation_manager.pack(response_observations)
@@ -293,12 +316,13 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                         )
                     if terminated or truncated:
                         response.state = dm_env_rpc_pb2.EnvironmentStateType.TERMINATED
-                        environment_should_be_reset = True
+                        environment.reset()
                     else:
                         response.state = dm_env_rpc_pb2.EnvironmentStateType.RUNNING
 
                 elif message_type == "reset":
-                    environment_should_be_reset = True
+                    self.get_environment(context.peer()).reset()
+
                     response = dm_env_rpc_pb2.ResetResponse()
                     for uid, action_space in self.action_spec.items():
                         response.specs.actions[uid].CopyFrom(action_space)
@@ -307,7 +331,7 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
                 elif message_type == "reset_world":
                     self.new_environment(context.peer())
-                    environment_should_be_reset = True
+
                     response = dm_env_rpc_pb2.ResetWorldResponse()
 
                 elif message_type == "leave_world":
