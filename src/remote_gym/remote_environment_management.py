@@ -1,22 +1,20 @@
+import importlib.util
+import json
 import logging
+import multiprocessing as mp
 from concurrent import futures
-from typing import Optional, Text, Tuple, Union, Callable
+from typing import Optional, Text, Tuple, Union, List
 
 import grpc
 import gym
 import gymnasium
 import numpy as np
-from dm_env_rpc.v1 import (
-    dm_env_rpc_pb2,
-    dm_env_rpc_pb2_grpc,
-    spec_manager,
-    tensor_spec_utils,
-)
+from dm_env_rpc.v1 import dm_env_rpc_pb2, dm_env_rpc_pb2_grpc, spec_manager, tensor_spec_utils, tensor_utils
 from google.rpc import code_pb2, status_pb2
 
 
 def start_as_remote_environment(
-    create_environment: Callable[[], Union[gym.Env, gymnasium.Env]],
+    default_args: dict,
     url: Text,
     port: int,
     server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
@@ -30,7 +28,7 @@ def start_as_remote_environment(
     NOTE: Use the RemoteEnvironment class to connect to a remotely started environment and provide a gym.Env interface.
 
     Args:
-        create_environment: Environment constructor which should be ran remotely on a server.
+        default_args: The arguments passed to the environment's entrypoint/constructor.
         url: URL to the machine where the remote environment should be running on.
         port: Port to open (on the remote machine URL) for communication with the remote environment.
         server_credentials_paths (optional; local connection if not provided):
@@ -48,7 +46,7 @@ def start_as_remote_environment(
     server = grpc.server(
         futures.ThreadPoolExecutor(),
     )
-    servicer = RemoteEnvironmentService(create_environment=create_environment, enable_rendering=enable_rendering)
+    servicer = RemoteEnvironmentService(default_args=default_args, enable_rendering=enable_rendering)
     dm_env_rpc_pb2_grpc.add_EnvironmentServicer_to_server(servicer, server)
 
     if server_credentials_paths:
@@ -135,30 +133,120 @@ def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
         raise ValueError
 
 
-class LazyResetEnvWrapper:
-    def __init__(
-        self,
-        environment: Union[gym.Env, gymnasium.Env],
-    ):
-        self.environment = environment
-        self.should_reset = True
+def create_gym_environment(default_args: dict, enable_rendering: bool) -> Union[gym.Env, gymnasium.Env]:
+    file_path = default_args.pop("entrypoint")
+    spec = importlib.util.spec_from_file_location("module.name", file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    create_environment = getattr(module, "create_environment", None)
+    environment = create_environment(enable_rendering=enable_rendering, **default_args)
+    return environment
 
-    def close(self):
-        self.environment.close()
 
-    def step(self, action, rendering_enabled: bool):
-        if self.should_reset:
-            observation, info = self.environment.reset()
+def run_env_loop(
+    default_args: List[any],
+    enable_rendering: bool,
+    queue: mp.Queue,
+    env_detail_queue: mp.Queue,
+):
+    env = create_gym_environment(default_args, enable_rendering)
+
+    action_spec = {
+        1: dm_env_rpc_pb2.TensorSpec(
+            name="action",
+            shape=env.action_space.shape,
+            dtype=space_to_dtype(env.action_space),
+        )
+    }
+
+    observation_spec = {
+        1: dm_env_rpc_pb2.TensorSpec(
+            name="observation",
+            shape=env.observation_space.shape,
+            dtype=space_to_dtype(env.observation_space),
+        ),
+        2: dm_env_rpc_pb2.TensorSpec(name="reward", dtype=dm_env_rpc_pb2.FLOAT),
+    }
+
+    action_space_bounds = space_to_bounds(env.action_space)
+    observation_space_bounds = space_to_bounds(env.observation_space)
+
+    tensor_spec_utils.set_bounds(action_spec[1], minimum=action_space_bounds[0], maximum=action_space_bounds[1])
+
+    tensor_spec_utils.set_bounds(
+        observation_spec[1], minimum=observation_space_bounds[0], maximum=observation_space_bounds[1]
+    )
+
+    tensor_spec_utils.set_bounds(
+        observation_spec[2],
+        minimum=env.reward_range[0],
+        maximum=env.reward_range[1],
+    )
+
+    if enable_rendering:
+        assert env.render_mode == "rgb_array", (
+            "Rendering remote environments is only possible if the `render_mode` attribute "
+            "of the passed environment is 'rgb_array'."
+        )
+        env.reset()
+        render_shape = env.render().shape
+        observation_spec.update(
+            {3: dm_env_rpc_pb2.TensorSpec(name="rendering", shape=render_shape, dtype=dm_env_rpc_pb2.UINT8)}
+        )
+        tensor_spec_utils.set_bounds(
+            observation_spec[3],
+            minimum=0,
+            maximum=255,
+        )
+
+    # Pass action and obs layout
+    env_detail_queue.put(action_spec)
+    env_detail_queue.put(observation_spec)
+
+    while True:
+        action, reset = queue.get()
+        if reset is None:
+            break
+
+        if reset:
+            observation, info = env.reset()
             reward = 0.0
             terminated = False
             truncated = False
-            self.should_reset = False
         else:
-            observation, reward, terminated, truncated, info = self.environment.step(action)
+            observation, reward, terminated, truncated, info = env.step(action)
 
-        rendering = self.environment.render() if rendering_enabled else None
+        rendering = env.render() if enable_rendering else None
 
-        return observation, reward, terminated, truncated, info, rendering
+        queue.put((observation, reward, terminated, truncated, rendering, info))
+
+    env.close()
+
+
+class ProcessedEnv:
+    def __init__(self, default_args: dict, enable_rendering: bool):
+        self.queue = mp.Queue()
+        env_detail_queue = mp.Queue()
+        self.should_reset = True
+
+        self.process = mp.Process(
+            target=run_env_loop, args=(default_args, enable_rendering, self.queue, env_detail_queue)
+        )
+        self.process.start()
+
+        self.action_spec, self.observation_spec = env_detail_queue.get(), env_detail_queue.get()
+
+        self.action_manager = spec_manager.SpecManager(self.action_spec)
+        self.observation_manager = spec_manager.SpecManager(self.observation_spec)
+
+    def close(self):
+        self.queue.put((None, None))
+        self.process.join()
+
+    def step(self, action):
+        self.queue.put((action, self.should_reset))
+        self.should_reset = False
+        return self.queue.get()
 
     def reset(self):
         self.should_reset = True
@@ -167,77 +255,20 @@ class LazyResetEnvWrapper:
 class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
-    def __init__(self, create_environment: Callable[[], Union[gym.Env, gymnasium.Env]], enable_rendering):
-        self.create_environment = create_environment
-        self.rendering_enabled = enable_rendering
+    def __init__(self, default_args: dict, enable_rendering: bool):
+        self.default_args = default_args
+        self.enable_rendering = enable_rendering
         self.environments = {}
 
-        self.action_spec = {}
-        self.observation_spec = {}
-
-        environment = self.create_environment()
-        self.lazy_init(environment)
-        environment.close()
-
-    def lazy_init(self, environment: Union[gym.Env, gymnasium.Env]):
-        self.action_spec = {
-            1: dm_env_rpc_pb2.TensorSpec(
-                name="action",
-                shape=environment.action_space.shape,
-                dtype=space_to_dtype(environment.action_space),
-            )
-        }
-
-        self.observation_spec = {
-            1: dm_env_rpc_pb2.TensorSpec(
-                name="observation",
-                shape=environment.observation_space.shape,
-                dtype=space_to_dtype(environment.observation_space),
-            ),
-            2: dm_env_rpc_pb2.TensorSpec(name="reward", dtype=dm_env_rpc_pb2.FLOAT),
-        }
-
-        action_space_bounds = space_to_bounds(environment.action_space)
-        observation_space_bounds = space_to_bounds(environment.observation_space)
-
-        tensor_spec_utils.set_bounds(
-            self.action_spec[1], minimum=action_space_bounds[0], maximum=action_space_bounds[1]
-        )
-
-        tensor_spec_utils.set_bounds(
-            self.observation_spec[1], minimum=observation_space_bounds[0], maximum=observation_space_bounds[1]
-        )
-
-        tensor_spec_utils.set_bounds(
-            self.observation_spec[2],
-            minimum=environment.reward_range[0],
-            maximum=environment.reward_range[1],
-        )
-
-        if self.rendering_enabled:
-            assert environment.render_mode == "rgb_array", (
-                "Rendering remote environments is only possible if the `render_mode` attribute "
-                "of the passed environment is 'rgb_array'."
-            )
-            environment.reset()
-            render_shape = environment.render().shape
-            self.observation_spec.update(
-                {3: dm_env_rpc_pb2.TensorSpec(name="rendering", shape=render_shape, dtype=dm_env_rpc_pb2.UINT8)}
-            )
-            tensor_spec_utils.set_bounds(
-                self.observation_spec[3],
-                minimum=0,
-                maximum=255,
-            )
-
-    def get_environment(self, user: str):
+    def get_environment(self, user: str) -> ProcessedEnv:
         if user not in self.environments:
             raise ValueError(f"Environment for user {user} does not exist.")
         return self.environments[user]
 
-    def new_environment(self, user: str):
+    def new_environment(self, user: str, args: dict):
+        merged_args = {**self.default_args, **args}
         self.destroy_environment(user)
-        self.environments[user] = LazyResetEnvWrapper(self.create_environment())
+        self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering)
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
 
     def destroy_environment(self, user: str):
@@ -265,9 +296,6 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
           EnvironmentResponse: Response for each incoming EnvironmentRequest.
         """
 
-        action_manager = spec_manager.SpecManager(self.action_spec)
-        observation_manager = spec_manager.SpecManager(self.observation_spec)
-
         for request in request_iterator:
             environment_response = dm_env_rpc_pb2.EnvironmentResponse()
 
@@ -279,36 +307,39 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                 if message_type == "create_world":
                     response = dm_env_rpc_pb2.CreateWorldResponse(world_name="world")
 
-                    self.new_environment(context.peer())
+                    args = json.loads(tensor_utils.unpack_tensor(internal_request.settings["args"]))
+                    self.new_environment(context.peer(), args)
 
                 elif message_type == "join_world":
                     # Make sure to shutdown when the client leaves
+                    # todo not sure if this adds double callbacks
                     context.add_callback(lambda p=context.peer(): self.destroy_environment(p))
 
-                    self.get_environment(context.peer()).reset()
+                    environment = self.get_environment(context.peer())
+                    environment.reset()
 
                     response = dm_env_rpc_pb2.JoinWorldResponse()
-                    for uid, action_space in self.action_spec.items():
+                    for uid, action_space in environment.action_spec.items():
                         response.specs.actions[uid].CopyFrom(action_space)
-                    for uid, observation_space in self.observation_spec.items():
+                    for uid, observation_space in environment.observation_spec.items():
                         response.specs.observations[uid].CopyFrom(observation_space)
 
                 elif message_type == "step":
-                    unpacked_actions = action_manager.unpack(internal_request.actions)
+                    environment = self.get_environment(context.peer())
+
+                    unpacked_actions = environment.action_manager.unpack(internal_request.actions)
                     action = unpacked_actions.get("action")
 
-                    environment = self.get_environment(context.peer())
-                    observation, reward, terminated, truncated, info, rendering = environment.step(
-                        action, self.rendering_enabled
-                    )
+                    observation, reward, terminated, truncated, _, rendering = environment.step(action)
 
-                    response = dm_env_rpc_pb2.StepResponse()
                     response_observations = {"observation": observation, "reward": reward}
 
-                    if self.rendering_enabled:
+                    if self.enable_rendering:
                         response_observations.update({"rendering": rendering})
 
-                    packed_response_observations = observation_manager.pack(response_observations)
+                    packed_response_observations = environment.observation_manager.pack(response_observations)
+
+                    response = dm_env_rpc_pb2.StepResponse()
 
                     for requested_observation in internal_request.requested_observations:
                         response.observations[requested_observation].CopyFrom(
@@ -321,16 +352,17 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                         response.state = dm_env_rpc_pb2.EnvironmentStateType.RUNNING
 
                 elif message_type == "reset":
-                    self.get_environment(context.peer()).reset()
+                    environment = self.get_environment(context.peer())
+                    environment.reset()
 
                     response = dm_env_rpc_pb2.ResetResponse()
-                    for uid, action_space in self.action_spec.items():
+                    for uid, action_space in environment.action_spec.items():
                         response.specs.actions[uid].CopyFrom(action_space)
-                    for uid, observation_space in self.observation_spec.items():
+                    for uid, observation_space in environment.observation_spec.items():
                         response.specs.observations[uid].CopyFrom(observation_space)
 
                 elif message_type == "reset_world":
-                    self.new_environment(context.peer())
+                    self.new_environment(context.peer(), self.enable_rendering)
 
                     response = dm_env_rpc_pb2.ResetWorldResponse()
 

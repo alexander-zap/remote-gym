@@ -9,6 +9,7 @@ from dm_env_rpc.v1 import connection as dm_env_rpc_connection
 from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
+import json
 
 
 class RemoteEnvironment(Env):
@@ -54,6 +55,7 @@ class RemoteEnvironment(Env):
         self,
         url: Text,
         port: int,
+        remote_args: dict,
         client_credentials_paths: Optional[Tuple[Text, Optional[Text], Optional[Text]]] = None,
         render_mode: Text = None,
         *args,
@@ -68,6 +70,7 @@ class RemoteEnvironment(Env):
         Args:
             url: URL to the machine where the remotely running environment application is hosted on.
             port: Open port on the remote machine (for communication with the remotely running environment application).
+            remote_args: Additional arguments sent to the remote environment
             client_credentials_paths (optional; local connection if not provided):
                 Tuple of paths to TSL authentication files:
                 - root_cert_path: Path to TSL root certificate
@@ -116,6 +119,7 @@ class RemoteEnvironment(Env):
 
         self.url = url
         self.port = port
+        self.remote_args = remote_args
         self.client_credentials_paths = client_credentials_paths
 
         self.connection, self.remote_environment = self._connect_to_remote_environment()
@@ -236,7 +240,7 @@ class RemoteEnvironment(Env):
         client_credentials = create_channel_credentials()
         connection = dm_env_rpc_connection.create_secure_channel_and_connect(server_address, client_credentials)
         remote_environment, _ = dm_env_adaptor.create_and_join_world(
-            connection, create_world_settings={}, join_world_settings={}
+            connection, create_world_settings={"args": json.dumps(self.remote_args)}, join_world_settings={}
         )
         return connection, remote_environment
 
