@@ -1,5 +1,6 @@
 import hashlib
 from pathlib import Path
+from typing import Optional
 
 import git
 from filelock import FileLock
@@ -9,7 +10,7 @@ def base64hash(string: str):
     return hashlib.sha256(string.encode("utf-8")).hexdigest()
 
 
-def clone_and_checkout(directory: Path, repository: str, ref: str | None):
+def clone_and_checkout(directory: Path, repository: str, ref: Optional[str]):
     # If the directory already exists, reuse the existing repo
     if directory.exists():
         repo = git.Repo(directory)
