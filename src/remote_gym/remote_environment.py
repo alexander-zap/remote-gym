@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import Optional, SupportsFloat, Text, Tuple
 
@@ -9,7 +10,6 @@ from dm_env_rpc.v1 import connection as dm_env_rpc_connection
 from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
-import json
 
 
 class RemoteEnvironment(Env):
@@ -55,7 +55,7 @@ class RemoteEnvironment(Env):
         self,
         url: Text,
         port: int,
-        remote_args: dict,
+        remote_args: dict = {},
         client_credentials_paths: Optional[Tuple[Text, Optional[Text], Optional[Text]]] = None,
         render_mode: Text = None,
         *args,

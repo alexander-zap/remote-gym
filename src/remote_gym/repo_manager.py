@@ -31,7 +31,7 @@ class RepoManager:
     Clones and keeps repositories up to date.
     """
 
-    def __init__(self, working_dir: Path):
+    def __init__(self, working_dir: Path = Path(".repo_cache")):
         self.working_dir = working_dir
         self.lock = FileLock(self.working_dir / "lock")
 

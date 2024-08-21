@@ -3,14 +3,23 @@ import json
 import logging
 import multiprocessing as mp
 from concurrent import futures
-from typing import Optional, Text, Tuple, Union, List
+from pathlib import Path
+from typing import List, Optional, Text, Tuple, Union
 
 import grpc
 import gym
 import gymnasium
 import numpy as np
-from dm_env_rpc.v1 import dm_env_rpc_pb2, dm_env_rpc_pb2_grpc, spec_manager, tensor_spec_utils, tensor_utils
+from dm_env_rpc.v1 import (
+    dm_env_rpc_pb2,
+    dm_env_rpc_pb2_grpc,
+    spec_manager,
+    tensor_spec_utils,
+    tensor_utils,
+)
 from google.rpc import code_pb2, status_pb2
+
+from remote_gym.repo_manager import RepoManager
 
 
 def start_as_remote_environment(
@@ -133,23 +142,32 @@ def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
         raise ValueError
 
 
-def create_gym_environment(default_args: dict, enable_rendering: bool) -> Union[gym.Env, gymnasium.Env]:
-    file_path = default_args.pop("entrypoint")
+def create_gym_environment(args: dict, enable_rendering: bool) -> Union[gym.Env, gymnasium.Env]:
+    # Clone the given repository
+    repo = args.pop("repo", None)
+    tag = args.pop("tag", None)
+    entrypoint = args.pop("entrypoint", None)
+    file_path = Path("./") if repo is None else RepoManager().get(repo, tag)
+    file_path /= entrypoint
+
+    # Load the entrypoint
     spec = importlib.util.spec_from_file_location("module.name", file_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+
+    # Instantiate the environment
     create_environment = getattr(module, "create_environment", None)
-    environment = create_environment(enable_rendering=enable_rendering, **default_args)
+    environment = create_environment(enable_rendering=enable_rendering, **args)
     return environment
 
 
 def run_env_loop(
-    default_args: List[any],
+    args: List[any],
     enable_rendering: bool,
     queue: mp.Queue,
     env_detail_queue: mp.Queue,
 ):
-    env = create_gym_environment(default_args, enable_rendering)
+    env = create_gym_environment(args, enable_rendering)
 
     action_spec = {
         1: dm_env_rpc_pb2.TensorSpec(
@@ -224,14 +242,12 @@ def run_env_loop(
 
 
 class ProcessedEnv:
-    def __init__(self, default_args: dict, enable_rendering: bool):
+    def __init__(self, args: dict, enable_rendering: bool):
         self.queue = mp.Queue()
         env_detail_queue = mp.Queue()
         self.should_reset = True
 
-        self.process = mp.Process(
-            target=run_env_loop, args=(default_args, enable_rendering, self.queue, env_detail_queue)
-        )
+        self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.queue, env_detail_queue))
         self.process.start()
 
         self.action_spec, self.observation_spec = env_detail_queue.get(), env_detail_queue.get()
@@ -266,6 +282,9 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         return self.environments[user]
 
     def new_environment(self, user: str, args: dict):
+        # We do not permit custom repositories for security reasons
+        args.pop("repo", None)
+
         merged_args = {**self.default_args, **args}
         self.destroy_environment(user)
         self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering)

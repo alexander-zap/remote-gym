@@ -2,8 +2,6 @@ import argparse
 import logging
 import sys
 
-import gymnasium as gym
-
 from remote_gym import start_as_remote_environment
 
 root = logging.getLogger()
@@ -13,7 +11,6 @@ handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
 root.addHandler(handler)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -64,10 +61,17 @@ if __name__ == "__main__":
     server_credentials_paths = (args.server_certificate, args.server_private_key, args.root_certificate)
     enable_rendering = args.enable_rendering
 
-    example_environment = gym.make("Acrobot-v1", render_mode="rgb_array")
-
     server = start_as_remote_environment(
-        local_environment=example_environment,
+        default_args={
+            # Server options
+            "repo": "git@github.com:Luke100000/remote-gym.git",
+            "branch": "master",
+            "tag": None,
+            "entrypoint": "exploration/remote_environment_entrypoint.py",
+            # Constructor options
+            "env": "Acrobot-v1",
+            "render_mode": "rgb_array",
+        },
         url=url,
         port=port,
         server_credentials_paths=server_credentials_paths if any(server_credentials_paths) else None,
