@@ -10,7 +10,7 @@ from dm_env_rpc.v1 import connection as dm_env_rpc_connection
 from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
-from omegaconf import OmegaConf
+from omegaconf import DictConfig, OmegaConf
 
 
 class RemoteEnvironment(Env):
@@ -242,7 +242,13 @@ class RemoteEnvironment(Env):
         connection = dm_env_rpc_connection.create_secure_channel_and_connect(server_address, client_credentials)
         remote_environment, _ = dm_env_adaptor.create_and_join_world(
             connection,
-            create_world_settings={"args": json.dumps(OmegaConf.to_container(self.remote_args))},
+            create_world_settings={
+                "args": json.dumps(
+                    OmegaConf.to_container(self.remote_args)
+                    if isinstance(self.remote_args, DictConfig)
+                    else self.remote_args
+                )
+            },
             join_world_settings={},
         )
         return connection, remote_environment

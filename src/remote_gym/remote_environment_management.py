@@ -164,105 +164,119 @@ def create_gym_environment(args: dict, enable_rendering: bool) -> Union[gym.Env,
 def run_env_loop(
     args: List[any],
     enable_rendering: bool,
-    queue: mp.Queue,
-    env_detail_queue: mp.Queue,
+    in_queue: mp.Queue,
+    out_queue: mp.Queue,
 ):
-    env = create_gym_environment(args, enable_rendering)
+    initialized = False
+    try:
+        env = create_gym_environment(args, enable_rendering)
 
-    action_spec = {
-        1: dm_env_rpc_pb2.TensorSpec(
-            name="action",
-            shape=env.action_space.shape,
-            dtype=space_to_dtype(env.action_space),
-        )
-    }
+        action_spec = {
+            1: dm_env_rpc_pb2.TensorSpec(
+                name="action",
+                shape=env.action_space.shape,
+                dtype=space_to_dtype(env.action_space),
+            )
+        }
 
-    observation_spec = {
-        1: dm_env_rpc_pb2.TensorSpec(
-            name="observation",
-            shape=env.observation_space.shape,
-            dtype=space_to_dtype(env.observation_space),
-        ),
-        2: dm_env_rpc_pb2.TensorSpec(name="reward", dtype=dm_env_rpc_pb2.FLOAT),
-    }
+        observation_spec = {
+            1: dm_env_rpc_pb2.TensorSpec(
+                name="observation",
+                shape=env.observation_space.shape,
+                dtype=space_to_dtype(env.observation_space),
+            ),
+            2: dm_env_rpc_pb2.TensorSpec(name="reward", dtype=dm_env_rpc_pb2.FLOAT),
+        }
 
-    action_space_bounds = space_to_bounds(env.action_space)
-    observation_space_bounds = space_to_bounds(env.observation_space)
+        action_space_bounds = space_to_bounds(env.action_space)
+        observation_space_bounds = space_to_bounds(env.observation_space)
 
-    tensor_spec_utils.set_bounds(action_spec[1], minimum=action_space_bounds[0], maximum=action_space_bounds[1])
+        tensor_spec_utils.set_bounds(action_spec[1], minimum=action_space_bounds[0], maximum=action_space_bounds[1])
 
-    tensor_spec_utils.set_bounds(
-        observation_spec[1], minimum=observation_space_bounds[0], maximum=observation_space_bounds[1]
-    )
-
-    tensor_spec_utils.set_bounds(
-        observation_spec[2],
-        minimum=env.reward_range[0],
-        maximum=env.reward_range[1],
-    )
-
-    if enable_rendering:
-        assert env.render_mode == "rgb_array", (
-            "Rendering remote environments is only possible if the `render_mode` attribute "
-            "of the passed environment is 'rgb_array'."
-        )
-        env.reset()
-        render_shape = env.render().shape
-        observation_spec.update(
-            {3: dm_env_rpc_pb2.TensorSpec(name="rendering", shape=render_shape, dtype=dm_env_rpc_pb2.UINT8)}
-        )
         tensor_spec_utils.set_bounds(
-            observation_spec[3],
-            minimum=0,
-            maximum=255,
+            observation_spec[1], minimum=observation_space_bounds[0], maximum=observation_space_bounds[1]
         )
 
-    # Pass action and obs layout
-    env_detail_queue.put(action_spec)
-    env_detail_queue.put(observation_spec)
+        tensor_spec_utils.set_bounds(
+            observation_spec[2],
+            minimum=env.reward_range[0],
+            maximum=env.reward_range[1],
+        )
 
-    while True:
-        action, reset = queue.get()
-        if reset is None:
-            break
+        if enable_rendering:
+            assert env.render_mode == "rgb_array", (
+                "Rendering remote environments is only possible if the `render_mode` attribute "
+                "of the passed environment is 'rgb_array'."
+            )
+            env.reset()
+            render_shape = env.render().shape
+            observation_spec.update(
+                {3: dm_env_rpc_pb2.TensorSpec(name="rendering", shape=render_shape, dtype=dm_env_rpc_pb2.UINT8)}
+            )
+            tensor_spec_utils.set_bounds(
+                observation_spec[3],
+                minimum=0,
+                maximum=255,
+            )
 
-        if reset:
-            observation, info = env.reset()
-            reward = 0.0
-            terminated = False
-            truncated = False
-        else:
-            observation, reward, terminated, truncated, info = env.step(action)
+        # Pass action and obs layout
+        out_queue.put(action_spec)
+        out_queue.put(observation_spec)
+        initialized = True
 
-        rendering = env.render() if enable_rendering else None
+        while True:
+            action, reset = in_queue.get()
+            if reset is None:
+                break
 
-        queue.put((observation, reward, terminated, truncated, rendering, info))
+            if reset:
+                observation, info = env.reset()
+                reward = 0.0
+                terminated = False
+                truncated = False
+            else:
+                observation, reward, terminated, truncated, info = env.step(action)
 
-    env.close()
+            rendering = env.render() if enable_rendering else None
+
+            out_queue.put((observation, reward, terminated, truncated, rendering, info))
+
+        env.close()
+    except Exception as e:
+        if not initialized:
+            out_queue.put(None)
+            out_queue.put(None)
+        out_queue.put(e)
 
 
 class ProcessedEnv:
     def __init__(self, args: dict, enable_rendering: bool):
-        self.queue = mp.Queue()
-        env_detail_queue = mp.Queue()
+        self.in_queue = mp.Queue()
+        self.out_queue = mp.Queue()
         self.should_reset = True
 
-        self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.queue, env_detail_queue))
+        self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.in_queue, self.out_queue))
         self.process.start()
 
-        self.action_spec, self.observation_spec = env_detail_queue.get(), env_detail_queue.get()
+        self.action_spec, self.observation_spec = self.out_queue.get(), self.out_queue.get()
+
+        if self.action_spec is None or self.observation_spec is None:
+            raise self.out_queue.get()
 
         self.action_manager = spec_manager.SpecManager(self.action_spec)
         self.observation_manager = spec_manager.SpecManager(self.observation_spec)
 
     def close(self):
-        self.queue.put((None, None))
+        self.in_queue.put((None, None))
         self.process.join()
 
     def step(self, action):
-        self.queue.put((action, self.should_reset))
+        self.in_queue.put((action, self.should_reset))
         self.should_reset = False
-        return self.queue.get()
+        result = self.out_queue.get()
+        if isinstance(result, Exception):
+            raise result
+        return result
 
     def reset(self):
         self.should_reset = True
@@ -283,6 +297,7 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
     def new_environment(self, user: str, args: dict):
         # We do not permit custom repositories for security reasons
+        # TODO: evaluate risk of custom entrypoints
         args.pop("repo", None)
 
         merged_args = {**self.default_args, **args}
