@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 import git
-from filelock import FileLock
+from fasteners import InterProcessLock
 
 
 def base64hash(string: str):
@@ -34,7 +34,7 @@ class RepoManager:
 
     def __init__(self, working_dir: Path = Path(".repo_cache")):
         self.working_dir = working_dir
-        self.lock = FileLock(self.working_dir / "lock")
+        self.lock = InterProcessLock(self.working_dir / "lock")
 
     def get(self, repository: str, tag: str = None):
         """
@@ -44,7 +44,7 @@ class RepoManager:
 
         target_dir = self.working_dir / f"{base64hash(repository + str(tag))}"
 
-        with self.lock.acquire():
+        with self.lock:
             clone_and_checkout(target_dir, repository, tag)
 
         return target_dir
