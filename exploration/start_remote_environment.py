@@ -64,7 +64,8 @@ if __name__ == "__main__":
     server = start_as_remote_environment(
         default_args={
             # Server options
-            "repo": "git@github.com:Luke100000/remote-gym.git",
+            "repo": None,  # None uses the local repos HEAD only
+            # "repo": "git@github.com:Luke100000/remote-gym.git",
             "branch": "master",
             "tag": None,
             "entrypoint": "exploration/remote_environment_entrypoint.py",

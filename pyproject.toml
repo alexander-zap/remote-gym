@@ -20,6 +20,7 @@ opencv-python = "^4.9.0.80"
 gitpython = "^3.1.43"
 omegaconf = "^2.3.0"
 fasteners = "^0.19"
+niche-utils = { git = "git@github.com:Luke100000/niche-utils.git", branch = "master" }
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.2"

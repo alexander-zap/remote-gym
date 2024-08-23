@@ -18,6 +18,7 @@ from dm_env_rpc.v1 import (
     tensor_utils,
 )
 from google.rpc import code_pb2, status_pb2
+from niche_utils.file_queue import FilesQueue
 
 from remote_gym.repo_manager import RepoManager
 
@@ -250,10 +251,13 @@ def run_env_loop(
 
 
 class ProcessedEnv:
-    def __init__(self, args: dict, enable_rendering: bool):
+    def __init__(self, args: dict, enable_rendering: bool, env_id: int):
         self.in_queue = mp.Queue()
         self.out_queue = mp.Queue()
         self.should_reset = True
+
+        self.env_id = env_id
+        args["env_id"] = self.env_id
 
         self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.in_queue, self.out_queue))
         self.process.start()
@@ -290,6 +294,9 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         self.enable_rendering = enable_rendering
         self.environments = {}
 
+        self.env_ids = FilesQueue()
+        self.env_ids.set([i for i in range(1024)][::-1])  # TODO: Magic number
+
     def get_environment(self, user: str) -> ProcessedEnv:
         if user not in self.environments:
             raise ValueError(f"Environment for user {user} does not exist.")
@@ -302,12 +309,16 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
         merged_args = {**self.default_args, **args}
         self.destroy_environment(user)
-        self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering)
+        env_id = self.env_ids.pop()
+        if env_id is None:
+            raise ValueError("Max environment count exceeded.")
+        self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering, env_id)
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
 
     def destroy_environment(self, user: str):
         if user in self.environments:
             self.environments[user].close()
+            self.env_ids.push(self.environments[user].env_id)
             del self.environments[user]
             logging.info(f"Destroyed environment for user {user} ({len(self.environments)} total active)")
 
