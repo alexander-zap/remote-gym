@@ -623,24 +623,6 @@ files = [
 ]
 
 [[package]]
-name = "niche-utils"
-version = "0.1.0"
-description = "A collection of classes and functions too specific for an own repo."
-optional = false
-python-versions = "^3.7"
-files = []
-develop = false
-
-[package.dependencies]
-fasteners = "^0.19"
-
-[package.source]
-type = "git"
-url = "git@github.com:Luke100000/niche-utils.git"
-reference = "master"
-resolved_reference = "03410365ed979f8059b8f69f533f055f86df8dba"
-
-[[package]]
 name = "nodeenv"
 version = "1.9.1"
 description = "Node.js virtual environment builder"
@@ -1182,4 +1164,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.7,<3.11"
-content-hash = "e6a10d45c318353e7e5ab0ee5c1f6f3622e29021b17ed6979e4ae190a4bafedb"
+content-hash = "fe5f8080afd97f385bb608cd4468fb1723bb3f2a85fc32c7f70c4a9471f9c8b3"

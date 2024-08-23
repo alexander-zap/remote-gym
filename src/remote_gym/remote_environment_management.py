@@ -18,7 +18,6 @@ from dm_env_rpc.v1 import (
     tensor_utils,
 )
 from google.rpc import code_pb2, status_pb2
-from niche_utils.file_queue import FilesQueue
 
 from remote_gym.repo_manager import RepoManager
 
@@ -294,8 +293,7 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         self.enable_rendering = enable_rendering
         self.environments = {}
 
-        self.env_ids = FilesQueue()
-        self.env_ids.set([i for i in range(1024)][::-1])  # TODO: Magic number
+        self.env_ids = [i for i in range(1024)][::-1]  # TODO: Magic number
 
     def get_environment(self, user: str) -> ProcessedEnv:
         if user not in self.environments:
@@ -309,16 +307,16 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
         merged_args = {**self.default_args, **args}
         self.destroy_environment(user)
-        env_id = self.env_ids.pop()
-        if env_id is None:
+        if len(self.env_ids) == 0:
             raise ValueError("Max environment count exceeded.")
+        env_id = self.env_ids.pop()
         self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering, env_id)
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
 
     def destroy_environment(self, user: str):
         if user in self.environments:
             self.environments[user].close()
-            self.env_ids.push(self.environments[user].env_id)
+            self.env_ids.append(self.environments[user].env_id)
             del self.environments[user]
             logging.info(f"Destroyed environment for user {user} ({len(self.environments)} total active)")
 
