@@ -353,7 +353,12 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                 if message_type == "create_world":
                     response = dm_env_rpc_pb2.CreateWorldResponse(world_name="world")
 
-                    args = json.loads(tensor_utils.unpack_tensor(internal_request.settings["args"]))
+                    packed_args = internal_request.settings["args"]
+                    args = (
+                        {}
+                        if packed_args.WhichOneof("payload") is None
+                        else json.loads(tensor_utils.unpack_tensor(packed_args))
+                    )
                     self.new_environment(context.peer(), args)
 
                 elif message_type == "join_world":
