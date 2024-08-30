@@ -2,6 +2,7 @@ import importlib.util
 import json
 import logging
 import multiprocessing as mp
+import traceback
 from concurrent import futures
 from pathlib import Path
 from typing import List, Optional, Text, Tuple, Union
@@ -247,6 +248,8 @@ def run_env_loop(
             out_queue.put(None)
             out_queue.put(None)
         out_queue.put(e)
+
+        logging.error("Stacktrace: %s", traceback.format_exc())
 
 
 class ProcessedEnv:
