@@ -199,6 +199,9 @@ class RemoteEnvironment(Env):
         else:
             raise NotImplementedError
 
+    def close(self):
+        self._disconnect_from_remote_environment()
+
     def _connect_to_remote_environment(
         self,
     ) -> Tuple[dm_env_adaptor.dm_env_rpc_connection.Connection, dm_env_adaptor.DmEnvAdaptor]:
@@ -270,6 +273,5 @@ class RemoteEnvironment(Env):
         self.remote_environment = None
         self.connection = None
 
-    # FIXME: Does not trigger in main-file, investigate.
     def __del__(self):
         self._disconnect_from_remote_environment()
