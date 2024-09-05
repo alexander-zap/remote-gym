@@ -21,7 +21,7 @@ def clone_and_checkout(directory: Path, repository: str, ref: Optional[str]):
 
     # Use the masters remote head by default
     if ref is None:
-        ref = repo.remotes.origin.refs.HEAD.ref
+        ref = "HEAD"
 
     if ("origin/" + ref) in repo.references:
         commit = repo.commit("origin/" + ref)
