@@ -15,6 +15,7 @@ def clone_and_checkout(directory: Path, repository: str, ref: Optional[str]):
     if directory.exists():
         repo = git.Repo(directory)
         repo.remotes.origin.fetch()
+        repo.remotes.origin.pull()
     else:
         # Clone the repository if it doesn't exist
         repo = git.Repo.clone_from(repository, directory)

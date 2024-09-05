@@ -2,6 +2,8 @@ import importlib.util
 import json
 import logging
 import multiprocessing as mp
+import os
+import sys
 import traceback
 from concurrent import futures
 from pathlib import Path
@@ -148,11 +150,14 @@ def create_gym_environment(args: dict, enable_rendering: bool) -> Union[gym.Env,
     repo = args.pop("repo", None)
     tag = args.pop("tag", None)
     entrypoint = args.pop("entrypoint", None)
-    file_path = Path("./") if repo is None else RepoManager().get(repo, tag)
-    file_path /= entrypoint
+    working_dir = Path("./") if repo is None else RepoManager().get(repo, tag)
+
+    # Set to current directory
+    os.chdir(working_dir.resolve())
+    sys.path.insert(0, str((working_dir / "src").resolve()))
 
     # Load the entrypoint
-    spec = importlib.util.spec_from_file_location("module.name", file_path)
+    spec = importlib.util.spec_from_file_location("module.name", entrypoint)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
