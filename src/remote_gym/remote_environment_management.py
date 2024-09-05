@@ -153,8 +153,8 @@ def create_gym_environment(args: dict, enable_rendering: bool) -> Union[gym.Env,
     working_dir = Path("./") if repo is None else RepoManager().get(repo, tag)
 
     # Set to current directory
-    os.chdir(working_dir.resolve())
-    sys.path.insert(0, str((working_dir / "src").resolve()))
+    sys.path.insert(0, str((working_dir / "src").resolve().absolute()))
+    os.chdir(working_dir.resolve().absolute())
 
     # Load the entrypoint
     spec = importlib.util.spec_from_file_location("module.name", entrypoint)

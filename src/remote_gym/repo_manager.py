@@ -14,8 +14,7 @@ def clone_and_checkout(directory: Path, repository: str, ref: Optional[str]):
     # If the directory already exists, reuse the existing repo
     if directory.exists():
         repo = git.Repo(directory)
-        repo.remotes.origin.fetch()
-        repo.remotes.origin.pull()
+        repo.remotes.origin.fetch(tags=True)
     else:
         # Clone the repository if it doesn't exist
         repo = git.Repo.clone_from(repository, directory)
@@ -24,8 +23,12 @@ def clone_and_checkout(directory: Path, repository: str, ref: Optional[str]):
     if ref is None:
         ref = repo.remotes.origin.refs.HEAD.ref
 
-    # Checkout the specific branch, tag, or commit
-    repo.git.checkout(ref, force=True)
+    if ("origin/" + ref) in repo.references:
+        commit = repo.commit("origin/" + ref)
+    else:
+        commit = repo.commit(ref)
+
+    repo.git.reset("--hard", commit)
 
 
 class RepoManager:
