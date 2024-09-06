@@ -245,7 +245,7 @@ def run_env_loop(
 
             rendering = env.render() if enable_rendering else None
 
-            out_queue.put((observation, reward, terminated, truncated, rendering, info))
+            out_queue.put((observation, reward, terminated, truncated, info, rendering))
 
         env.close()
     except Exception as e:
@@ -386,7 +386,7 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                     unpacked_actions = environment.action_manager.unpack(internal_request.actions)
                     action = unpacked_actions.get("action")
 
-                    observation, reward, terminated, truncated, _, rendering = environment.step(action)
+                    observation, reward, terminated, truncated, info, rendering = environment.step(action)
 
                     response_observations = {"observation": observation, "reward": reward}
 
