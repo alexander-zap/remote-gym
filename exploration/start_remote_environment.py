@@ -64,14 +64,13 @@ if __name__ == "__main__":
     server = start_as_remote_environment(
         default_args={
             # Server options
-            "repo": None,  # None uses the local repos HEAD only
-            # "repo": "git@github.com:Luke100000/remote-gym.git",
-            "branch": "master",
-            "tag": None,
+            "repo": "git@github.com:Luke100000/remote-gym.git",
+            "tag": "master",
             "entrypoint": "exploration/remote_environment_entrypoint.py",
-            # Constructor options
-            "env": "Acrobot-v1",
-            "render_mode": "rgb_array",
+            "kwargs": {
+                "env": "Acrobot-v1",
+                "render_mode": "rgb_array",
+            },
         },
         url=url,
         port=port,

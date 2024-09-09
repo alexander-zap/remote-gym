@@ -7,7 +7,7 @@ import sys
 import traceback
 from concurrent import futures
 from pathlib import Path
-from typing import List, Optional, Text, Tuple, Union
+from typing import Optional, Text, Tuple, Union
 
 import grpc
 import gym
@@ -22,11 +22,12 @@ from dm_env_rpc.v1 import (
 )
 from google.rpc import code_pb2, status_pb2
 
+from remote_gym.remote_environment import RemoteArgs
 from remote_gym.repo_manager import RepoManager
 
 
 def start_as_remote_environment(
-    default_args: dict,
+    default_args: RemoteArgs,
     url: Text,
     port: int,
     server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
@@ -40,7 +41,7 @@ def start_as_remote_environment(
     NOTE: Use the RemoteEnvironment class to connect to a remotely started environment and provide a gym.Env interface.
 
     Args:
-        default_args: The arguments passed to the environment's entrypoint/constructor.
+        default_args: The arguments passed to the entrypoint/method which creates the environment.
         url: URL to the machine where the remote environment should be running on.
         port: Port to open (on the remote machine URL) for communication with the remote environment.
         server_credentials_paths (optional; local connection if not provided):
@@ -145,11 +146,11 @@ def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
         raise ValueError
 
 
-def create_gym_environment(args: dict, enable_rendering: bool) -> Union[gym.Env, gymnasium.Env]:
+def create_gym_environment(args: RemoteArgs, enable_rendering: bool) -> Union[gym.Env, gymnasium.Env]:
     # Clone the given repository
-    repo = args.pop("repo", None)
-    tag = args.pop("tag", None)
-    entrypoint = args.pop("entrypoint", None)
+    repo = args.get("repo", None)
+    tag = args.get("tag", None)
+    entrypoint = args.get("entrypoint", None)
     working_dir = Path("./") if repo is None else RepoManager().get(repo, tag)
 
     # Set to current directory
@@ -163,12 +164,12 @@ def create_gym_environment(args: dict, enable_rendering: bool) -> Union[gym.Env,
 
     # Instantiate the environment
     create_environment = getattr(module, "create_environment", None)
-    environment = create_environment(enable_rendering=enable_rendering, **args)
+    environment = create_environment(enable_rendering=enable_rendering, **args.get("kwargs", {}))
     return environment
 
 
 def run_env_loop(
-    args: List[any],
+    args: RemoteArgs,
     enable_rendering: bool,
     in_queue: mp.Queue,
     out_queue: mp.Queue,
@@ -258,13 +259,15 @@ def run_env_loop(
 
 
 class ProcessedEnv:
-    def __init__(self, args: dict, enable_rendering: bool, env_id: int):
+    def __init__(self, args: RemoteArgs, enable_rendering: bool, env_id: int):
         self.in_queue = mp.Queue()
         self.out_queue = mp.Queue()
         self.should_reset = True
 
         self.env_id = env_id
-        args["env_id"] = self.env_id
+
+        # We pass the env_id as an additional kwarg
+        args["kwargs"]["env_id"] = self.env_id
 
         self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.in_queue, self.out_queue))
         self.process.start()
@@ -296,7 +299,7 @@ class ProcessedEnv:
 class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
-    def __init__(self, default_args: dict, enable_rendering: bool):
+    def __init__(self, default_args: RemoteArgs, enable_rendering: bool):
         self.default_args = default_args
         self.enable_rendering = enable_rendering
         self.environments = {}
@@ -308,16 +311,22 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
             raise ValueError(f"Environment for user {user} does not exist.")
         return self.environments[user]
 
-    def new_environment(self, user: str, args: dict):
+    def new_environment(self, user: str, args: RemoteArgs):
         # We do not permit custom repositories for security reasons
-        # TODO: evaluate risk of custom entrypoints
-        args.pop("repo", None)
+        if args.get("repo", None) is not None:
+            raise ValueError("Custom repositories are prohibited!")
 
-        merged_args = {**self.default_args, **args}
         self.destroy_environment(user)
+
         if len(self.env_ids) == 0:
             raise ValueError("Max environment count exceeded.")
         env_id = self.env_ids.pop()
+
+        merged_args: RemoteArgs = {**self.default_args, **args}
+        merged_args["kwargs"] = {
+            **self.default_args.get("kwargs", {}),
+            **args.get("kwargs", {}),
+        }
         self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering, env_id)
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
 

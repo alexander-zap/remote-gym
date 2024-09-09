@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Optional, SupportsFloat, Text, Tuple
+from typing import Dict, Optional, SupportsFloat, Text, Tuple, TypedDict
 
 import cv2
 import grpc
@@ -10,7 +10,13 @@ from dm_env_rpc.v1 import connection as dm_env_rpc_connection
 from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
-from omegaconf import DictConfig, OmegaConf
+
+
+class RemoteArgs(TypedDict):
+    repo: Optional[str]  # Repository to clone, None does not permit cloning
+    tag: Optional[str]  # Tag, Branch, or Commit ID to check out
+    entrypoint: str  # Filename of entrypoint, containing a create_environment
+    kwargs: Dict[str, any]  # Additional parameters passed to create_environment
 
 
 class RemoteEnvironment(Env):
@@ -56,7 +62,7 @@ class RemoteEnvironment(Env):
         self,
         url: Text,
         port: int,
-        remote_args: dict = {},
+        remote_args: RemoteArgs = {},
         client_credentials_paths: Optional[Tuple[Text, Optional[Text], Optional[Text]]] = None,
         render_mode: Text = None,
         *args,
@@ -241,17 +247,12 @@ class RemoteEnvironment(Env):
             return client_credentials
 
         server_address = f"{self.url}:{self.port}"
-        client_credentials = create_channel_credentials()
-        connection = dm_env_rpc_connection.create_secure_channel_and_connect(server_address, client_credentials)
+        connection = dm_env_rpc_connection.create_secure_channel_and_connect(
+            server_address, create_channel_credentials()
+        )
         remote_environment, _ = dm_env_adaptor.create_and_join_world(
             connection,
-            create_world_settings={
-                "args": json.dumps(
-                    OmegaConf.to_container(self.remote_args)
-                    if isinstance(self.remote_args, DictConfig)
-                    else self.remote_args
-                )
-            },
+            create_world_settings={"args": json.dumps(self.remote_args)},
             join_world_settings={},
         )
         return connection, remote_environment
