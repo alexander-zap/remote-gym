@@ -309,12 +309,12 @@ class ProcessedEnv:
 class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
-    def __init__(self, default_args: RemoteArgs, enable_rendering: bool):
+    def __init__(self, default_args: RemoteArgs, enable_rendering: bool, max_concurrent_environments: int = 1024):
         self.default_args = default_args
         self.enable_rendering = enable_rendering
         self.environments = {}
 
-        self.env_ids = [i for i in range(1024)][::-1]  # TODO: Magic number
+        self.available_env_ids = [i for i in range(max_concurrent_environments)][::-1]
 
     def get_environment(self, user: str) -> ProcessedEnv:
         if user not in self.environments:
@@ -328,9 +328,9 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
         self.destroy_environment(user)
 
-        if len(self.env_ids) == 0:
+        if len(self.available_env_ids) == 0:
             raise ValueError("Max environment count exceeded.")
-        env_id = self.env_ids.pop()
+        env_id = self.available_env_ids.pop()
 
         merged_args: RemoteArgs = {**self.default_args, **args}
         merged_args["kwargs"] = {
@@ -343,7 +343,7 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     def destroy_environment(self, user: str):
         if user in self.environments:
             self.environments[user].close()
-            self.env_ids.append(self.environments[user].env_id)
+            self.available_env_ids.append(self.environments[user].env_id)
             del self.environments[user]
             logging.info(f"Destroyed environment for user {user} ({len(self.environments)} total active)")
 
