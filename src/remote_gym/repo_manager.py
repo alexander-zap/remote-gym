@@ -37,12 +37,24 @@ class RepoManager:
     """
 
     def __init__(self, working_dir: Path = Path(".repo_cache")):
+        """
+        Args:
+            working_dir: The cache directory for locally cloned repositories.
+        """
         self.working_dir = working_dir
         self.lock = InterProcessLock(self.working_dir / "lock")
 
-    def get(self, repository: str, tag: str = None):
+    def get(self, repository: str, tag: str = None) -> Path:
         """
         Returns a path to the clones repository on the given tag.
+
+        Args:
+            repository: Valid repository URL to clone from.
+            tag: Valid reference (branch, tag, or commit hash) to checkout.
+            None will default to HEAD.
+
+        Returns:
+            A path to the root of the checked out repository.
         """
         self.working_dir.mkdir(exist_ok=True)
 
