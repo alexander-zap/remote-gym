@@ -3,14 +3,13 @@ from pathlib import Path
 from remote_gym.repo_manager import RepoManager
 
 WORKING_DIR = Path(".repo_cache")
-REPOSITORY = "ssh://git@stash.wargaming.net:2222/rp43/synthetic-player-environments.git"
+REPOSITORY = "https://github.com/Luke100000/remote-gym"
 
 
 def test_default():
     RepoManager(WORKING_DIR).get(REPOSITORY)
 
-
-def test_update_default():
+    # And test update on the same repo
     RepoManager(WORKING_DIR).get(REPOSITORY)
 
 
@@ -19,4 +18,8 @@ def test_branch():
 
 
 def test_commit():
-    RepoManager(WORKING_DIR).get(REPOSITORY, "3486445022a73d43234bb32e19af66f161c03893")
+    RepoManager(WORKING_DIR).get(REPOSITORY, "f08450496e6da433bf6551916868f9a32ce30691")
+
+
+def test_tag():
+    RepoManager(WORKING_DIR).get(REPOSITORY, "test_tag")
