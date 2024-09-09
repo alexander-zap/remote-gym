@@ -11,4 +11,4 @@ except ImportError:
     typing.runtime_checkable = typing_extensions.runtime_checkable
 
 from .remote_environment import RemoteArgs, RemoteEnvironment
-from .remote_environment_management import start_as_remote_environment
+from .remote_environment_management import create_remote_environment

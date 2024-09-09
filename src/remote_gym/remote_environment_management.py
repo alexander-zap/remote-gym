@@ -26,7 +26,7 @@ from remote_gym.remote_environment import RemoteArgs
 from remote_gym.repo_manager import RepoManager
 
 
-def start_as_remote_environment(
+def create_remote_environment(
     default_args: RemoteArgs,
     url: Text,
     port: int,
@@ -38,10 +38,20 @@ def start_as_remote_environment(
     Starts the Catch gRPC server and passes the locally instantiated environment.
     Requires credentials to open a secure server port in gRPC. Needs to match the client authentication.
 
-    NOTE: Use the RemoteEnvironment class to connect to a remotely started environment and provide a gym.Env interface.
+    The entrypoint file must define a function `create_environment`:
+    ```py
+    def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env:
+        return gym.make(...)
+    ```
+    * `enable_rendering` is whether the env should render.
+    * `env_id` is a unique identifier for the environment, used for non-sharable resources.
+    * `kwargs` are any additional kwargs passed from the RemoteEnvironment.
+
+    NOTE: Use the RemoteEnvironment class to connect to a remotely started environment.
 
     Args:
         default_args: The arguments passed to the entrypoint/method which creates the environment.
+            At least the entrypoint must be provided!
         url: URL to the machine where the remote environment should be running on.
         port: Port to open (on the remote machine URL) for communication with the remote environment.
         server_credentials_paths (optional; local connection if not provided):
@@ -395,7 +405,7 @@ class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                     unpacked_actions = environment.action_manager.unpack(internal_request.actions)
                     action = unpacked_actions.get("action")
 
-                    observation, reward, terminated, truncated, info, rendering = environment.step(action)
+                    observation, reward, terminated, truncated, _info, rendering = environment.step(action)
 
                     response_observations = {"observation": observation, "reward": reward}
 

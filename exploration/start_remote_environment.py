@@ -2,7 +2,7 @@ import argparse
 import logging
 import sys
 
-from remote_gym import start_as_remote_environment
+from remote_gym import create_remote_environment
 
 root = logging.getLogger()
 root.setLevel(logging.DEBUG)
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     server_credentials_paths = (args.server_certificate, args.server_private_key, args.root_certificate)
     enable_rendering = args.enable_rendering
 
-    server = start_as_remote_environment(
+    server = create_remote_environment(
         default_args={
             # Server options
             "repo": "git@github.com:Luke100000/remote-gym.git",

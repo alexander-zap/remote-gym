@@ -9,8 +9,8 @@ Adapted `dm_env_rpc` for `Gym.env` environments.
 ## Usage
 
 ### Main Features
-- Use the `start_as_remote_environment` method to convert a `Gym.env` environment into a remotely running environment.
-- Use the `RemoteEnvironment` class to manage the connection to a remotely running environment (from `start_as_remote_environment`) and provide the standardized `Gym.env` interface to your agents through a `RemoteEnvironment` object.
+- Use the `create_remote_environment` method to start a `Gym.env` environment as a remotely running environment.
+- Use the `RemoteEnvironment` class to manage the connection to a remotely running environment (from `create_remote_environment`) and provide the standardized `Gym.env` interface to your agents through a `RemoteEnvironment` object.
 - Basically: `remote-gym` is to `Gym.env` as what `dm_env_rpc` is to `dm_env`.
 
 ### Getting Started
@@ -22,28 +22,46 @@ In [this accompanying script](exploration/start_environment_interaction.py) you 
 For a quick impression in this README, find a minimal environment hosting and environment interaction example below.
 
 First process:
-```
-    server = start_as_remote_environment(
-        local_environment=example_environment,
-        # IP of the machine hosting the remote environment; can also be 0.0.0.0
-        url=YOUR_SERVER_IP,
-        # port the remote environment should use on the hosting machine
-        port=PORT_FOR_REMOTE_ENVIRONMENT_TO_RUN_ON,
-        # not using a tuple but setting this completely to None is also possible in case only a local connection is required
-        server_credentials_paths=("path/to/server.pem", "path/to/server-key.pem", "optional/path/to/ca.pem"),
-        # can be set to True in case rendering is required, but significantly increases exchanged data and slows down interaction
-        enable_rendering=False,
-    )
 
-    try:
-        server.wait_for_termination()
-    except Exception as e:
-        server.stop(None)
-        logging.exception(e)
+```py
+import logging
+
+from remote_gym import create_remote_environment
+
+server = create_remote_environment(
+   default_args={
+      "entrypoint": "exploration/remote_environment_entrypoint.py",
+   },
+   # IP of the machine hosting the remote environment; can also be 0.0.0.0
+   url=YOUR_SERVER_IP,
+   # port the remote environment should use on the hosting machine
+   port=PORT_FOR_REMOTE_ENVIRONMENT_TO_LISTEN,
+   # not using a tuple but setting this completely to None is also possible in case only a local connection is required
+   server_credentials_paths=("path/to/server.pem", "path/to/server-key.pem", "optional/path/to/ca.pem"),
+   # can be set to True in case rendering is required, but significantly increases exchanged data and slows down interaction
+   enable_rendering=False,
+)
+
+try:
+   server.wait_for_termination()
+except Exception as e:
+   server.stop(None)
+   logging.exception(e)
 ```
+
+With an `entrypoint.py` like this:
+
+````py
+import gymnasium as gym
+
+def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env:
+    return gym.make("Acrobot-v1")
+````
 
 Second process:
-```
+```py
+from remote_gym import RemoteEnvironment
+
 environment = RemoteEnvironment(
     url=YOUR_SERVER_IP,
     port=PORT_FOR_REMOTE_ENVIRONMENT_TO_RUN_ON,
@@ -53,12 +71,14 @@ environment = RemoteEnvironment(
     render_mode=None,
 )
 
-action = environment.action_space.sample()
+done = False
+episode_reward = 0
+environment.reset()
 while not done:
-    observation, reward, terminated, truncated, info = environment.step(action)
-    episode_reward += reward
-    done = terminated or truncated
-    action = environment.action_space.sample()
+  action = environment.action_space.sample()
+  _observation, reward, terminated, truncated, _info = environment.step(action)
+  episode_reward += reward
+  done = terminated or truncated
 ```
 
 ## Set-Up

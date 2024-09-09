@@ -13,10 +13,31 @@ from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
 
 
 class RemoteArgs(TypedDict):
-    repo: Optional[str]  # Repository to clone, None does not permit cloning
-    tag: Optional[str]  # Tag, Branch, or Commit ID to check out
-    entrypoint: str  # Filename of entrypoint, containing a create_environment
-    kwargs: Dict[str, any]  # Additional parameters passed to create_environment
+    """
+    Configuration on how to start the remote environment.
+
+    Attributes:
+        repo (Optional[str]): The repository to clone. If set to None, cloning is not permitted.
+        tag (Optional[str]): The tag, branch, or commit ID to check out.
+        entrypoint (str): The filename of the entrypoint, containing a create_environment function.
+        kwargs (Dict[str, any]): Additional parameters passed to the create_environment function.
+
+
+    Example:
+        ```
+        args = RemoteArgs(
+            repo='https://github.com/example/repo.git',
+            tag='v1.0',
+            entrypoint='main.py',
+            kwargs={'param1': 'value1', 'param2': 2}
+        )
+        ```
+    """
+
+    repo: Optional[str]
+    tag: Optional[str]
+    entrypoint: str
+    kwargs: Dict[str, any]
 
 
 class RemoteEnvironment(Env):
@@ -155,6 +176,9 @@ class RemoteEnvironment(Env):
         Run one timestep of the environment's dynamics.
         Accepts an action and returns a tuple (observation, reward, done, info).
         """
+        if self.remote_environment is None:
+            raise RuntimeError("Environment not connected to remote environment, call reset first!.")
+
         timestep = self.remote_environment.step({"action": action})
 
         observation = timestep.observation.get("observation")
