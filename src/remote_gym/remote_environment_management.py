@@ -26,7 +26,7 @@ from remote_gym.remote_environment import RemoteArgs
 from remote_gym.repo_manager import RepoManager
 
 
-def create_remote_environment(
+def create_remote_environment_server(
     default_args: RemoteArgs,
     url: Text,
     port: int,
@@ -35,7 +35,7 @@ def create_remote_environment(
 ) -> grpc.Server:
     """
     Method with which every environment can be transformed to a remote one.
-    Starts the Catch gRPC server and passes the locally instantiated environment.
+    Starts the Catch gRPC server and instantiates environments on new connections.
     Requires credentials to open a secure server port in gRPC. Needs to match the client authentication.
 
     The entrypoint file must define a function `create_environment`:
@@ -163,9 +163,12 @@ def create_gym_environment(args: RemoteArgs, enable_rendering: bool) -> Union[gy
     entrypoint = args.get("entrypoint", None)
     working_dir = Path("./") if repo is None else RepoManager().get(repo, tag)
 
-    # Set to current directory
-    sys.path.insert(0, str((working_dir / "src").resolve().absolute()))
-    os.chdir(working_dir.resolve().absolute())
+    # Set to current directory and add the common subdir "src"
+    sys.path.insert(0, str((working_dir / "src").resolve()))
+    os.chdir(working_dir.resolve())
+
+    # Enforce relative paths
+    entrypoint = Path(entrypoint).resolve().relative_to(Path(".").resolve())
 
     # Load the entrypoint
     spec = importlib.util.spec_from_file_location("module.name", entrypoint)

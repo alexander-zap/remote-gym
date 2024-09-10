@@ -1,11 +1,11 @@
-from remote_gym import RemoteEnvironment, create_remote_environment
+from remote_gym import RemoteEnvironment, create_remote_environment_server
 
 
 def test_readme():
     # Launch server
-    server = create_remote_environment(
+    server = create_remote_environment_server(
         default_args={
-            "entrypoint": "../exploration/remote_environment_entrypoint.py",
+            "entrypoint": "exploration/remote_environment_entrypoint.py",
             "kwargs": {
                 "env": "Acrobot-v1",
                 "render_mode": "rgb_array",

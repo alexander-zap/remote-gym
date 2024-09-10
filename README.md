@@ -9,8 +9,8 @@ Adapted `dm_env_rpc` for `Gym.env` environments.
 ## Usage
 
 ### Main Features
-- Use the `create_remote_environment` method to start a `Gym.env` environment as a remotely running environment.
-- Use the `RemoteEnvironment` class to manage the connection to a remotely running environment (from `create_remote_environment`) and provide the standardized `Gym.env` interface to your agents through a `RemoteEnvironment` object.
+- Use the `create_remote_environment_server` method to start a `Gym.env` environment as a remotely running environment.
+- Use the `RemoteEnvironment` class to manage the connection to a remotely running environment (from `create_remote_environment_server`) and provide the standardized `Gym.env` interface to your agents through a `RemoteEnvironment` object.
 - Basically: `remote-gym` is to `Gym.env` as what `dm_env_rpc` is to `dm_env`.
 
 ### Getting Started
@@ -26,9 +26,9 @@ First process:
 ```py
 import logging
 
-from remote_gym import create_remote_environment
+from remote_gym import create_remote_environment_server
 
-server = create_remote_environment(
+server = create_remote_environment_server(
    default_args={
       "entrypoint": "exploration/remote_environment_entrypoint.py",
    },
@@ -51,12 +51,12 @@ except Exception as e:
 
 With an `entrypoint.py` like this:
 
-````py
+```py
 import gymnasium as gym
 
 def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env:
     return gym.make("Acrobot-v1")
-````
+```
 
 Second process:
 ```py
