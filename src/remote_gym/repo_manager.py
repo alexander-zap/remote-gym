@@ -44,13 +44,13 @@ class RepoManager:
         self.working_dir = working_dir
         self.lock = InterProcessLock(self.working_dir / "lock")
 
-    def get(self, repository: str, tag: str = None) -> Path:
+    def get(self, repository: str, reference: str = None) -> Path:
         """
-        Returns a path to the clones repository on the given tag.
+        Returns a path to the clones repository on the given reference.
 
         Args:
             repository: Valid repository URL to clone from.
-            tag: Valid reference (branch, tag, or commit hash) to checkout.
+            reference: Valid reference (branch, tag, or commit hash) to checkout.
             None will default to HEAD.
 
         Returns:
@@ -58,9 +58,9 @@ class RepoManager:
         """
         self.working_dir.mkdir(exist_ok=True)
 
-        target_dir = self.working_dir / f"{base64hash(repository + str(tag))}"
+        target_dir = self.working_dir / f"{base64hash(repository + str(reference))}"
 
         with self.lock:
-            clone_and_checkout(target_dir, repository, tag)
+            clone_and_checkout(target_dir, repository, reference)
 
         return target_dir

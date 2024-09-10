@@ -18,7 +18,7 @@ class RemoteArgs(TypedDict):
 
     Attributes:
         repo (Optional[str]): The repository to clone. If set to None, cloning is not permitted.
-        tag (Optional[str]): The tag, branch, or commit ID to check out.
+        reference (Optional[str]): The tag, branch, or commit ID to check out.
         entrypoint (str): The filename of the entrypoint, containing a create_environment function.
         kwargs (Dict[str, any]): Additional parameters passed to the create_environment function.
 
@@ -27,7 +27,7 @@ class RemoteArgs(TypedDict):
         ```
         args = RemoteArgs(
             repo='https://github.com/example/repo.git',
-            tag='v1.0',
+            reference='v1.0',
             entrypoint='main.py',
             kwargs={'param1': 'value1', 'param2': 2}
         )
@@ -35,7 +35,7 @@ class RemoteArgs(TypedDict):
     """
 
     repo: Optional[str]
-    tag: Optional[str]
+    reference: Optional[str]
     entrypoint: str
     kwargs: Dict[str, any]
 

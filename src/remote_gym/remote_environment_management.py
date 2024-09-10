@@ -159,9 +159,9 @@ def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
 def create_gym_environment(args: RemoteArgs, enable_rendering: bool) -> Union[gym.Env, gymnasium.Env]:
     # Clone the given repository
     repo = args.get("repo", None)
-    tag = args.get("tag", None)
+    reference = args.get("reference", None)
     entrypoint = args.get("entrypoint", None)
-    working_dir = Path("./") if repo is None else RepoManager().get(repo, tag)
+    working_dir = Path("./") if repo is None else RepoManager().get(repo, reference)
 
     # Set to current directory and add the common subdir "src"
     sys.path.insert(0, str((working_dir / "src").resolve()))

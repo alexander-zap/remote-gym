@@ -65,7 +65,7 @@ if __name__ == "__main__":
         default_args={
             # Server options
             "repo": "git@github.com:Luke100000/remote-gym.git",
-            "tag": "master",
+            "reference": "master",
             "entrypoint": "exploration/remote_environment_entrypoint.py",
             "kwargs": {
                 "env": "Acrobot-v1",
