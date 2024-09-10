@@ -69,7 +69,7 @@ def create_remote_environment(
     server = grpc.server(
         futures.ThreadPoolExecutor(),
     )
-    servicer = RemoteEnvironmentService(default_args=default_args, enable_rendering=enable_rendering)
+    servicer = RemoteEnvironmentServicer(default_args=default_args, enable_rendering=enable_rendering)
     dm_env_rpc_pb2_grpc.add_EnvironmentServicer_to_server(servicer, server)
 
     if server_credentials_paths:
@@ -306,7 +306,7 @@ class ProcessedEnv:
         self.should_reset = True
 
 
-class RemoteEnvironmentService(dm_env_rpc_pb2_grpc.EnvironmentServicer):
+class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
     def __init__(self, default_args: RemoteArgs, enable_rendering: bool, max_concurrent_environments: int = 1024):
