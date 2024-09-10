@@ -385,11 +385,11 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                     )
                     self.new_environment(context.peer(), args)
 
-                elif message_type == "join_world":
                     # Make sure to shutdown when the client leaves
-                    # todo not sure if this adds double callbacks
+                    # TODO: memory leak if a user creates multiple worlds
                     context.add_callback(lambda p=context.peer(): self.destroy_environment(p))
 
+                elif message_type == "join_world":
                     environment = self.get_environment(context.peer())
                     environment.reset()
 
@@ -442,7 +442,6 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                     response = dm_env_rpc_pb2.ResetWorldResponse()
 
                 elif message_type == "leave_world":
-                    self.destroy_environment(context.peer())
                     response = dm_env_rpc_pb2.LeaveWorldResponse()
 
                 elif message_type == "destroy_world":
