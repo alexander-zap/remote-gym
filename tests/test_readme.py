@@ -6,7 +6,7 @@ def test_readme():
     server = create_remote_environment_server(
         default_args={
             "entrypoint": "exploration/remote_environment_entrypoint.py",
-            "kwargs": {
+            "entrypoint_kwargs": {
                 "env": "Acrobot-v1",
                 "render_mode": "rgb_array",
             },

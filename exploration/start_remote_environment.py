@@ -67,7 +67,7 @@ if __name__ == "__main__":
             "repo": "git@github.com:Luke100000/remote-gym.git",
             "reference": "master",
             "entrypoint": "exploration/remote_environment_entrypoint.py",
-            "kwargs": {
+            "entrypoint_kwargs": {
                 "env": "Acrobot-v1",
                 "render_mode": "rgb_array",
             },

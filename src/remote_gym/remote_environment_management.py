@@ -177,7 +177,7 @@ def create_gym_environment(args: RemoteArgs, enable_rendering: bool) -> Union[gy
 
     # Instantiate the environment
     create_environment = getattr(module, "create_environment", None)
-    environment = create_environment(enable_rendering=enable_rendering, **args.get("kwargs", {}))
+    environment = create_environment(enable_rendering=enable_rendering, **args.get("entrypoint_kwargs", {}))
     return environment
 
 
@@ -280,7 +280,7 @@ class ProcessedEnv:
         self.env_id = env_id
 
         # We pass the env_id as an additional kwarg
-        args["kwargs"]["env_id"] = self.env_id
+        args["entrypoint_kwargs"]["env_id"] = self.env_id
 
         self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.in_queue, self.out_queue))
         self.process.start()
@@ -336,9 +336,9 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         env_id = self.available_env_ids.pop()
 
         merged_args: RemoteArgs = {**self.default_args, **args}
-        merged_args["kwargs"] = {
-            **self.default_args.get("kwargs", {}),
-            **args.get("kwargs", {}),
+        merged_args["entrypoint_kwargs"] = {
+            **self.default_args.get("entrypoint_kwargs", {}),
+            **args.get("entrypoint_kwargs", {}),
         }
         self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering, env_id)
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
