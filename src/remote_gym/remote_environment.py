@@ -98,7 +98,9 @@ class RemoteEnvironment(Env):
         Args:
             url: URL to the machine where the remotely running environment application is hosted on.
             port: Open port on the remote machine (for communication with the remotely running environment application).
-            remote_args: Additional arguments sent to the remote environment
+            remote_args: Options and kwargs sent to the remote environment server,
+                overwriting "default" arguments which are already configured when initializing the server
+                (in `remote_environment_management.create_remote_environment_server`).
             client_credentials_paths (optional; local connection if not provided):
                 Tuple of paths to TSL authentication files:
                 - root_cert_path: Path to TSL root certificate
