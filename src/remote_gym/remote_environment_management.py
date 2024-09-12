@@ -160,7 +160,6 @@ def create_gym_environment(args: RemoteArgs, enable_rendering: bool) -> Union[gy
     # Clone the given repository
     repo = args.get("repo", None)
     reference = args.get("reference", None)
-    entrypoint = args.get("entrypoint", None)
     working_dir = Path("./") if repo is None else RepoManager().get(repo, reference)
 
     # Set to current directory and add the common subdir "src"
@@ -168,6 +167,9 @@ def create_gym_environment(args: RemoteArgs, enable_rendering: bool) -> Union[gy
     os.chdir(working_dir.resolve())
 
     # Enforce relative paths
+    entrypoint = args.get("entrypoint", None)
+    if entrypoint is None:
+        raise ValueError("No entrypoint provided.")
     entrypoint = Path(entrypoint).resolve().relative_to(Path(".").resolve())
 
     # Load the entrypoint
