@@ -37,15 +37,7 @@ def create_remote_environment_server(
     Method with which every environment can be transformed to a remote one.
     Starts the Catch gRPC server and instantiates environments on new connections.
     Requires credentials to open a secure server port in gRPC. Needs to match the client authentication.
-
-    The entrypoint file must define a function `create_environment`:
-    ```py
-    def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env:
-        return gym.make(...)
-    ```
-    * `enable_rendering` is whether the env should render.
-    * `env_id` is a unique identifier for the environment, used for non-sharable resources.
-    * `kwargs` are any additional kwargs passed from the RemoteEnvironment.
+    See RemoteArgs for details on the entrypoint requirements.
 
     NOTE: Use the RemoteEnvironment class to connect to a remotely started environment.
 

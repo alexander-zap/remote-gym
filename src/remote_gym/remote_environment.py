@@ -23,9 +23,22 @@ class RemoteArgs(TypedDict):
             Either the server (default args) or the remote environment (remote args) need to provide it.
         entrypoint_kwargs (Dict[str, any]): Additional parameters passed to the create_environment function.
 
+    Note:
+        The entrypoint file must define a function `create_environment`:
+        ```py
+        def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env:
+            return gym.make(...)
+        ```
+        * `enable_rendering` is whether the env should render.
+        * `env_id` is a unique identifier for the environment, used for non-sharable resources.
+        * `kwargs` are any additional kwargs, including entrypoint_kwargs passed from the RemoteEnvironment
+
+        The server may add additional fields (such as `enable_rendering` and `end_id`).
+        To remain forward-compatible, use **kwargs to dismiss unused fields!
+
 
     Example:
-        ```
+        ```py
         args = RemoteArgs(
             repo='https://github.com/example/repo.git',
             reference='v1.0',
