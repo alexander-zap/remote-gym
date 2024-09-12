@@ -181,7 +181,6 @@ def run_env_loop(
     in_queue: mp.Queue,
     out_queue: mp.Queue,
 ):
-    initialized = False
     try:
         env = create_gym_environment(args, enable_rendering)
 
@@ -234,9 +233,8 @@ def run_env_loop(
             )
 
         # Pass action and obs layout
-        out_queue.put(action_spec)
-        out_queue.put(observation_spec)
-        initialized = True
+        out_queue.put({"action_spec": action_spec})
+        out_queue.put({"observation_spec": observation_spec})
 
         while True:
             action, reset = in_queue.get()
@@ -253,15 +251,11 @@ def run_env_loop(
 
             rendering = env.render() if enable_rendering else None
 
-            out_queue.put((observation, reward, terminated, truncated, info, rendering))
+            out_queue.put({"step": (observation, reward, terminated, truncated, info, rendering)})
 
         env.close()
     except Exception as e:
-        if not initialized:
-            out_queue.put(None)
-            out_queue.put(None)
-        out_queue.put(e)
-
+        out_queue.put({"exception": e})
         logging.error("Stacktrace: %s", traceback.format_exc())
 
 
@@ -279,13 +273,19 @@ class ProcessedEnv:
         self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.in_queue, self.out_queue))
         self.process.start()
 
-        self.action_spec, self.observation_spec = self.out_queue.get(), self.out_queue.get()
-
-        if self.action_spec is None or self.observation_spec is None:
-            raise self.out_queue.get()
+        self.action_spec = self.get_message("action_spec")
+        self.observation_spec = self.get_message("observation_spec")
 
         self.action_manager = spec_manager.SpecManager(self.action_spec)
         self.observation_manager = spec_manager.SpecManager(self.observation_spec)
+
+    def get_message(self, key: str):
+        msg = self.out_queue.get()
+        if "exception" in msg:
+            raise msg["exception"]
+        if key not in msg:
+            raise ValueError(f"Expected missing key {key}, got {msg}")
+        return msg[key]
 
     def close(self):
         self.in_queue.put((None, None))
@@ -294,10 +294,7 @@ class ProcessedEnv:
     def step(self, action):
         self.in_queue.put((action, self.should_reset))
         self.should_reset = False
-        result = self.out_queue.get()
-        if isinstance(result, Exception):
-            raise result
-        return result
+        return self.get_message("step")
 
     def reset(self):
         self.should_reset = True
