@@ -13,6 +13,7 @@ import grpc
 import gym
 import gymnasium
 import numpy as np
+import psutil
 from dm_env_rpc.v1 import (
     dm_env_rpc_pb2,
     dm_env_rpc_pb2_grpc,
@@ -259,6 +260,28 @@ def run_env_loop(
         logging.error("Stacktrace: %s", traceback.format_exc())
 
 
+def terminate_process(proc: mp.Process, grace_period: float = 15.0) -> None:
+    """
+    Terminate the process and its children
+    """
+    try:
+        # Try asking friendly
+        process = psutil.Process(proc.pid)
+        for child in process.children(recursive=True):
+            child.terminate()
+        proc.terminate()
+        proc.join(grace_period)
+
+        # And kill when that wasn't enough (Unix only)
+        for child in process.children(recursive=True):
+            if child.is_running():
+                child.kill()
+        if process.is_running():
+            process.kill()
+    except psutil.NoSuchProcess:
+        pass
+
+
 class ProcessedEnv:
     def __init__(self, args: RemoteArgs, enable_rendering: bool, env_id: int):
         self.in_queue = mp.Queue()
@@ -288,8 +311,13 @@ class ProcessedEnv:
         return msg[key]
 
     def close(self):
+        logging.info("Closing process!")
         self.in_queue.put((None, None))
-        self.process.join()
+        self.process.join(timeout=15.0)
+
+        if self.process.is_alive():
+            logging.warning("Process does not close on its own, terminating!")
+            terminate_process(self.process)
 
     def step(self, action):
         self.in_queue.put((action, self.should_reset))
@@ -307,6 +335,7 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         self.default_args = default_args
         self.enable_rendering = enable_rendering
         self.environments = {}
+        self.stale_environments = set()
 
         self.available_env_ids = [i for i in range(max_concurrent_environments)][::-1]
 
@@ -320,19 +349,32 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         if args.get("repo", None) is not None:
             raise ValueError("Custom repositories are prohibited!")
 
+        if user in self.stale_environments:
+            self.stale_environments.remove(user)
+
+        # Destroy old environment
         self.destroy_environment(user)
 
+        # Allocate unique id
         if len(self.available_env_ids) == 0:
             raise ValueError("Max environment count exceeded.")
         env_id = self.available_env_ids.pop()
 
+        # Merge remote args
         merged_args: RemoteArgs = {**self.default_args, **args}
         merged_args["entrypoint_kwargs"] = {
             **self.default_args.get("entrypoint_kwargs", {}),
             **args.get("entrypoint_kwargs", {}),
         }
+
+        # Start environment
         self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering, env_id)
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
+
+        # Check if environment got stale and destroy it again
+        if user in self.stale_environments:
+            logging.info("Environment got stale, destroying it again")
+            self.destroy_environment(user)
 
     def destroy_environment(self, user: str):
         if user in self.environments:
@@ -340,6 +382,11 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
             self.available_env_ids.append(self.environments[user].env_id)
             del self.environments[user]
             logging.info(f"Destroyed environment for user {user} ({len(self.environments)} total active)")
+        else:
+            logging.info(f"Attempted to destroy non existing environment for user {user}.")
+
+            # Mark as stale in case the env was still booting up
+            self.stale_environments.add(user)
 
     def Process(self, request_iterator, context):
         """Processes incoming EnvironmentRequests.
