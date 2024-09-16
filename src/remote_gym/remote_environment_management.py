@@ -284,7 +284,7 @@ class ProcessedEnv:
         if "exception" in msg:
             raise msg["exception"]
         if key not in msg:
-            raise ValueError(f"Expected missing key {key}, got {msg}")
+            raise ValueError(f"Unexpected message in remote-gym communication between servicer and environment execution loop: Expected message with content key {key}, but got following message: {msg}")
         return msg[key]
 
     def close(self):
