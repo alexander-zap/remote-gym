@@ -338,7 +338,7 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         self.default_args = default_args
         self.enable_rendering = enable_rendering
         self.environments = {}
-        self.stale_environments = set()
+        self.users_waiting_for_environment_destruction = set()
 
         self.available_env_ids = [i for i in range(max_concurrent_environments)][::-1]
 
@@ -353,8 +353,8 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
             raise ValueError("Custom repositories are prohibited!")
 
         # Clear stale status
-        if user in self.stale_environments:
-            self.stale_environments.remove(user)
+        if user in self.users_waiting_for_environment_destruction:
+            self.users_waiting_for_environment_destruction.remove(user)
 
         # Destroy old environment if present
         if user in self.environments:
@@ -377,7 +377,7 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
 
         # Check if environment got stale and destroy it again
-        if user in self.stale_environments:
+        if user in self.users_waiting_for_environment_destruction:
             logging.info("Environment got stale, destroying it again")
             self.destroy_environment(user)
 
@@ -391,7 +391,7 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
             logging.info(f"Attempted to destroy non existing environment for user {user}.")
 
             # Mark as stale in case the env was still booting up
-            self.stale_environments.add(user)
+            self.users_waiting_for_environment_destruction.add(user)
 
     def Process(self, request_iterator, context):
         """Processes incoming EnvironmentRequests.
