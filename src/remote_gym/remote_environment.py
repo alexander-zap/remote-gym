@@ -1,5 +1,6 @@
+import json
 import logging
-from typing import Optional, SupportsFloat, Text, Tuple
+from typing import Dict, Optional, SupportsFloat, Text, Tuple, TypedDict
 
 import cv2
 import grpc
@@ -9,6 +10,48 @@ from dm_env_rpc.v1 import connection as dm_env_rpc_connection
 from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
+
+
+class RemoteArgs(TypedDict):
+    """
+    Configuration on how to start the remote environment.
+
+    Attributes:
+        repo (Optional[str]): The repository to clone. If set to None, cloning is not permitted.
+        reference (Optional[str]): The tag, branch, or commit ID to check out.
+        entrypoint (Optional[str]): The filename of the entrypoint, containing a create_environment function.
+            Either the server (default args) or the remote environment (remote args) need to provide it.
+        entrypoint_kwargs (Dict[str, any]): Additional parameters passed to the create_environment function.
+
+    Note:
+        The entrypoint file must define a function `create_environment`:
+        ```py
+        def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env:
+            return gym.make(...)
+        ```
+        * `enable_rendering` is whether the env should render.
+        * `env_id` is a unique identifier for the environment, used for non-sharable resources.
+        * `kwargs` are any additional kwargs, including entrypoint_kwargs passed from the RemoteEnvironment
+
+        The server may add additional fields (such as `enable_rendering` and `end_id`).
+        To remain forward-compatible, use **kwargs to dismiss unused fields!
+
+
+    Example:
+        ```py
+        args = RemoteArgs(
+            repo='https://github.com/example/repo.git',
+            reference='v1.0',
+            entrypoint='main.py',
+            entrypoint_kwargs={'param1': 'value1', 'param2': 2}
+        )
+        ```
+    """
+
+    repo: Optional[str]
+    reference: Optional[str]
+    entrypoint: Optional[str]
+    entrypoint_kwargs: Dict[str, any]
 
 
 class RemoteEnvironment(Env):
@@ -54,6 +97,7 @@ class RemoteEnvironment(Env):
         self,
         url: Text,
         port: int,
+        remote_args: RemoteArgs = {},
         client_credentials_paths: Optional[Tuple[Text, Optional[Text], Optional[Text]]] = None,
         render_mode: Text = None,
         *args,
@@ -68,6 +112,9 @@ class RemoteEnvironment(Env):
         Args:
             url: URL to the machine where the remotely running environment application is hosted on.
             port: Open port on the remote machine (for communication with the remotely running environment application).
+            remote_args: Options and kwargs sent to the remote environment server,
+                overwriting "default" arguments which are already configured when initializing the server
+                (in `remote_environment_management.create_remote_environment_server`).
             client_credentials_paths (optional; local connection if not provided):
                 Tuple of paths to TSL authentication files:
                 - root_cert_path: Path to TSL root certificate
@@ -116,6 +163,7 @@ class RemoteEnvironment(Env):
 
         self.url = url
         self.port = port
+        self.remote_args = remote_args
         self.client_credentials_paths = client_credentials_paths
 
         self.connection, self.remote_environment = self._connect_to_remote_environment()
@@ -144,6 +192,9 @@ class RemoteEnvironment(Env):
         Run one timestep of the environment's dynamics.
         Accepts an action and returns a tuple (observation, reward, done, info).
         """
+        if self.remote_environment is None:
+            raise RuntimeError("Environment not connected to remote environment, call reset first!.")
+
         timestep = self.remote_environment.step({"action": action})
 
         observation = timestep.observation.get("observation")
@@ -236,10 +287,13 @@ class RemoteEnvironment(Env):
             return client_credentials
 
         server_address = f"{self.url}:{self.port}"
-        client_credentials = create_channel_credentials()
-        connection = dm_env_rpc_connection.create_secure_channel_and_connect(server_address, client_credentials)
+        connection = dm_env_rpc_connection.create_secure_channel_and_connect(
+            server_address, create_channel_credentials()
+        )
         remote_environment, _ = dm_env_adaptor.create_and_join_world(
-            connection, create_world_settings={}, join_world_settings={}
+            connection,
+            create_world_settings={"args": json.dumps(self.remote_args)},
+            join_world_settings={},
         )
         return connection, remote_environment
 

@@ -71,6 +71,11 @@ if __name__ == "__main__":
         port=port,
         client_credentials_paths=client_credentials_paths if any(client_credentials_paths) else None,
         render_mode=render_mode,
+        remote_args={
+            "entrypoint_kwargs": {
+                "env": "Taxi-v3",
+            }
+        },
     )
 
     # Print some environment information (observation and action space)
