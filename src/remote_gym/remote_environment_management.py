@@ -352,6 +352,7 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         if args.get("repo", None) is not None:
             raise ValueError("Custom repositories are prohibited!")
 
+        # Clear stale status
         if user in self.stale_environments:
             self.stale_environments.remove(user)
 
@@ -422,6 +423,10 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                 if message_type == "create_world":
                     response = dm_env_rpc_pb2.CreateWorldResponse(world_name="world")
 
+                    # Make sure to shutdown when the client leaves
+                    # TODO: memory leak if a user creates multiple worlds
+                    context.add_callback(lambda p=context.peer(): self.destroy_environment(p))
+
                     packed_args = internal_request.settings["args"]
                     args = (
                         {}
@@ -429,10 +434,6 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                         else json.loads(tensor_utils.unpack_tensor(packed_args))
                     )
                     self.new_environment(context.peer(), args)
-
-                    # Make sure to shutdown when the client leaves
-                    # TODO: memory leak if a user creates multiple worlds
-                    context.add_callback(lambda p=context.peer(): self.destroy_environment(p))
 
                 elif message_type == "join_world":
                     environment = self.get_environment(context.peer())
