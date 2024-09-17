@@ -307,7 +307,10 @@ class ProcessedEnv:
         if "exception" in msg:
             raise msg["exception"]
         if key not in msg:
-            raise ValueError(f"Unexpected message in remote-gym communication between servicer and environment execution loop: Expected message with content key {key}, but got following message: {msg}")
+            raise ValueError(
+                "Unexpected message in remote-gym communication between servicer and environment execution loop: "
+                f"Expected message with content key {key}, but got following message: {msg}"
+            )
         return msg[key]
 
     def close(self):
@@ -352,8 +355,9 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         if user in self.stale_environments:
             self.stale_environments.remove(user)
 
-        # Destroy old environment
-        self.destroy_environment(user)
+        # Destroy old environment if present
+        if user in self.environments:
+            self.destroy_environment(user)
 
         # Allocate unique id
         if len(self.available_env_ids) == 0:
