@@ -296,13 +296,13 @@ class ProcessedEnv:
         self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.in_queue, self.out_queue))
         self.process.start()
 
-        self.action_spec = self.get_message("action_spec")
-        self.observation_spec = self.get_message("observation_spec")
+        self.action_spec = self.get_message_from_out_queue("action_spec")
+        self.observation_spec = self.get_message_from_out_queue("observation_spec")
 
         self.action_manager = spec_manager.SpecManager(self.action_spec)
         self.observation_manager = spec_manager.SpecManager(self.observation_spec)
 
-    def get_message(self, key: str):
+    def get_message_from_out_queue(self, key: str):
         msg = self.out_queue.get()
         if "exception" in msg:
             raise msg["exception"]
@@ -325,7 +325,7 @@ class ProcessedEnv:
     def step(self, action):
         self.in_queue.put((action, self.should_reset))
         self.should_reset = False
-        return self.get_message("step")
+        return self.get_message_from_out_queue("step")
 
     def reset(self):
         self.should_reset = True
