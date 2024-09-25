@@ -26,15 +26,18 @@ class RemoteArgs(TypedDict):
     Note:
         The entrypoint file must define a function `create_environment`:
         ```py
-        def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env:
+        def create_environment(env_id: int, **kwargs) -> gym.Env:
             return gym.make(...)
         ```
-        * `enable_rendering` is whether the env should render.
         * `env_id` is a unique identifier for the environment, used for non-sharable resources.
         * `kwargs` are any additional kwargs, including entrypoint_kwargs passed from the RemoteEnvironment
 
-        The server may add additional fields (such as `enable_rendering` and `end_id`).
+        The server may add additional fields (such as `end_id`).
         To remain forward-compatible, use **kwargs to dismiss unused fields!
+
+        It is recommended to only enable rendering if required to preserve server resources.
+        Rendering is send together with the observation if the environments render mode is set to "rgb_array"
+        One can for example pass a kwarg "enable_rendering" to let the entrypoint know that rendering should be enabled.
 
 
     Example:
