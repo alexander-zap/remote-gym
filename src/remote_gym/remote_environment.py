@@ -26,14 +26,13 @@ class RemoteArgs(TypedDict):
     Note:
         The entrypoint file must define a function `create_environment`:
         ```py
-        def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env:
+        def create_environment(env_id: int, **kwargs) -> gym.Env:
             return gym.make(...)
         ```
-        * `enable_rendering` is whether the env should render.
         * `env_id` is a unique identifier for the environment, used for non-sharable resources.
         * `kwargs` are any additional kwargs, including entrypoint_kwargs passed from the RemoteEnvironment
 
-        The server may add additional fields (such as `enable_rendering` and `end_id`).
+        The server may add additional fields (such as `env_id`).
         To remain forward-compatible, use **kwargs to dismiss unused fields!
 
 
@@ -126,7 +125,6 @@ class RemoteEnvironment(Env):
                 - “rgb_array” (default): return a single frame representing the current state of the environment.
                     A frame is a np.ndarray with shape (x, y, 3) representing RGB values for an x-by-y pixel image.
                 - “human”: .render displays the current frame on the current display using cv2
-                NOTE: Rendering is only supported if the remote environment was initiated with `enable_rendering=True`
         """
 
         def convert_to_space(spec: specs.Array) -> Space:

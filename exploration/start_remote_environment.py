@@ -29,14 +29,6 @@ if __name__ == "__main__":
         default=56789,
     )
     parser.add_argument(
-        "-r",
-        "--enable_rendering",
-        action="store_true",
-        help="Flag for enabling rendering on the remote environment. "
-        "If set to True, make sure that the passed environment has its .render_mode attribute set to 'rgb_array'.",
-        default=False,
-    )
-    parser.add_argument(
         "--server_certificate",
         type=str,
         help="Path to the self-signed server certificate (for TLS authentication)",  # server.pem
@@ -59,7 +51,6 @@ if __name__ == "__main__":
     url = args.url
     port = args.port
     server_credentials_paths = (args.server_certificate, args.server_private_key, args.root_certificate)
-    enable_rendering = args.enable_rendering
 
     server = create_remote_environment_server(
         default_args={
@@ -75,7 +66,6 @@ if __name__ == "__main__":
         url=url,
         port=port,
         server_credentials_paths=server_credentials_paths if any(server_credentials_paths) else None,
-        enable_rendering=enable_rendering,
     )
 
     try:

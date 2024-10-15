@@ -32,7 +32,6 @@ def create_remote_environment_server(
     url: Text,
     port: int,
     server_credentials_paths: Optional[Tuple[Text, Text, Optional[Text]]] = None,
-    enable_rendering: bool = False,
 ) -> grpc.Server:
     """
     Method with which every environment can be transformed to a remote one.
@@ -52,8 +51,6 @@ def create_remote_environment_server(
             - server_cert_path: Path to TSL server certificate
             - server_private_key_path: Path to TLS server private key
             - root_cert_path: Path to TSL root certificate (optional, only for client authentication)
-        enable_rendering (bool; default False): Flag to enable rendering support for connecting RemoteEnvironments.
-            NOTE: Only supported if the passed `local_environment` has its .render_mode attribute set to "rgb_array".
 
     Returns:
         server: Reference to the gRPC server (for later closing)
@@ -62,7 +59,7 @@ def create_remote_environment_server(
     server = grpc.server(
         futures.ThreadPoolExecutor(),
     )
-    servicer = RemoteEnvironmentServicer(default_args=default_args, enable_rendering=enable_rendering)
+    servicer = RemoteEnvironmentServicer(default_args=default_args)
     dm_env_rpc_pb2_grpc.add_EnvironmentServicer_to_server(servicer, server)
 
     if server_credentials_paths:
@@ -149,7 +146,7 @@ def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
         raise ValueError
 
 
-def create_gym_environment(args: RemoteArgs, enable_rendering: bool) -> Union[gym.Env, gymnasium.Env]:
+def create_gym_environment(args: RemoteArgs) -> Union[gym.Env, gymnasium.Env]:
     # Clone the given repository
     repo = args.get("repo", None)
     reference = args.get("reference", None)
@@ -172,18 +169,17 @@ def create_gym_environment(args: RemoteArgs, enable_rendering: bool) -> Union[gy
 
     # Instantiate the environment
     create_environment = getattr(module, "create_environment", None)
-    environment = create_environment(enable_rendering=enable_rendering, **args.get("entrypoint_kwargs", {}))
+    environment = create_environment(**args.get("entrypoint_kwargs", {}))
     return environment
 
 
 def run_env_loop(
     args: RemoteArgs,
-    enable_rendering: bool,
     in_queue: mp.Queue,
     out_queue: mp.Queue,
 ):
     try:
-        env = create_gym_environment(args, enable_rendering)
+        env = create_gym_environment(args)
 
         action_spec = {
             1: dm_env_rpc_pb2.TensorSpec(
@@ -217,11 +213,7 @@ def run_env_loop(
             maximum=env.reward_range[1],
         )
 
-        if enable_rendering:
-            assert env.render_mode == "rgb_array", (
-                "Rendering remote environments is only possible if the `render_mode` attribute "
-                "of the passed environment is 'rgb_array'."
-            )
+        if env.render_mode == "rgb_array":
             env.reset()
             render_shape = env.render().shape
             observation_spec.update(
@@ -250,7 +242,7 @@ def run_env_loop(
             else:
                 observation, reward, terminated, truncated, info = env.step(action)
 
-            rendering = env.render() if enable_rendering else None
+            rendering = env.render() if env.render_mode == "rgb_array" else None
 
             out_queue.put({"step": (observation, reward, terminated, truncated, info, rendering)})
 
@@ -283,17 +275,18 @@ def terminate_process(proc: mp.Process, grace_period: float = 15.0) -> None:
 
 
 class ProcessedEnv:
-    def __init__(self, args: RemoteArgs, enable_rendering: bool, env_id: int):
+    def __init__(self, args: RemoteArgs, env_id: int):
         self.in_queue = mp.Queue()
         self.out_queue = mp.Queue()
         self.should_reset = True
 
+        self.args = args
         self.env_id = env_id
 
         # We pass the env_id as an additional kwarg
         args["entrypoint_kwargs"]["env_id"] = self.env_id
 
-        self.process = mp.Process(target=run_env_loop, args=(args, enable_rendering, self.in_queue, self.out_queue))
+        self.process = mp.Process(target=run_env_loop, args=(args, self.in_queue, self.out_queue))
         self.process.start()
 
         self.action_spec = self.get_message_from_out_queue("action_spec")
@@ -334,9 +327,8 @@ class ProcessedEnv:
 class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
-    def __init__(self, default_args: RemoteArgs, enable_rendering: bool, max_concurrent_environments: int = 1024):
+    def __init__(self, default_args: RemoteArgs, max_concurrent_environments: int = 1024):
         self.default_args = default_args
-        self.enable_rendering = enable_rendering
         self.environments = {}
         self.users_waiting_for_environment_destruction = set()
 
@@ -373,7 +365,7 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
         }
 
         # Start environment
-        self.environments[user] = ProcessedEnv(merged_args, self.enable_rendering, env_id)
+        self.environments[user] = ProcessedEnv(merged_args, env_id)
         logging.info(f"Created new environment for user {user} ({len(self.environments)} total active)")
 
         # Check if environment got stale and destroy it again
@@ -455,7 +447,7 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
 
                     response_observations = {"observation": observation, "reward": reward}
 
-                    if self.enable_rendering:
+                    if rendering is not None:
                         response_observations.update({"rendering": rendering})
 
                     packed_response_observations = environment.observation_manager.pack(response_observations)
@@ -483,7 +475,8 @@ class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
                         response.specs.observations[uid].CopyFrom(observation_space)
 
                 elif message_type == "reset_world":
-                    self.new_environment(context.peer(), self.enable_rendering)
+                    environment = self.get_environment(context.peer())
+                    self.new_environment(context.peer(), environment.args)
 
                     response = dm_env_rpc_pb2.ResetWorldResponse()
 
