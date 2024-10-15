@@ -29,17 +29,15 @@ import logging
 from remote_gym import create_remote_environment_server
 
 server = create_remote_environment_server(
-   default_args={
-      "entrypoint": "exploration/remote_environment_entrypoint.py",
-   },
-   # IP of the machine hosting the remote environment; can also be 0.0.0.0
-   url=YOUR_SERVER_IP,
-   # port the remote environment should use on the hosting machine
-   port=PORT_FOR_REMOTE_ENVIRONMENT_TO_LISTEN,
-   # not using a tuple but setting this completely to None is also possible in case only a local connection is required
-   server_credentials_paths=("path/to/server.pem", "path/to/server-key.pem", "optional/path/to/ca.pem"),
-   # can be set to True in case rendering is required, but significantly increases exchanged data and slows down interaction
-   enable_rendering=False,
+    default_args={
+        "entrypoint": "exploration/remote_environment_entrypoint.py",
+    },
+    # IP of the machine hosting the remote environment; can also be 0.0.0.0
+    url=YOUR_SERVER_IP,
+    # port the remote environment should use on the hosting machine
+    port=PORT_FOR_REMOTE_ENVIRONMENT_TO_LISTEN,
+    # not using a tuple but setting this completely to None is also possible in case only a local connection is required
+    server_credentials_paths=("path/to/server.pem", "path/to/server-key.pem", "optional/path/to/ca.pem"),
 )
 
 try:
@@ -75,11 +73,18 @@ done = False
 episode_reward = 0
 environment.reset()
 while not done:
-  action = environment.action_space.sample()
-  _observation, reward, terminated, truncated, _info = environment.step(action)
-  episode_reward += reward
-  done = terminated or truncated
+    action = environment.action_space.sample()
+    _observation, reward, terminated, truncated, _info = environment.step(action)
+    episode_reward += reward
+    done = terminated or truncated
 ```
+
+### Rendering
+
+To preserve server resources and prevent network slowdowns, it is recommended to only enable rendering if required.
+Renderings are automatically transferred from the remote management server to the RemoteEnvironment together with the
+observation if the `render_mode` of the hosted environment is `rgb_array`.
+The `render_mode` of the hosted environment should be controlled by the `entrypoint_kwargs` passed to the entrypoint.
 
 ## Set-Up
 

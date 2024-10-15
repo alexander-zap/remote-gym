@@ -35,10 +35,6 @@ class RemoteArgs(TypedDict):
         The server may add additional fields (such as `end_id`).
         To remain forward-compatible, use **kwargs to dismiss unused fields!
 
-        It is recommended to only enable rendering if required to preserve server resources.
-        Rendering is send together with the observation if the environments render mode is set to "rgb_array"
-        One can for example pass a kwarg "enable_rendering" to let the entrypoint know that rendering should be enabled.
-
 
     Example:
         ```py
@@ -129,7 +125,6 @@ class RemoteEnvironment(Env):
                 - “rgb_array” (default): return a single frame representing the current state of the environment.
                     A frame is a np.ndarray with shape (x, y, 3) representing RGB values for an x-by-y pixel image.
                 - “human”: .render displays the current frame on the current display using cv2
-                NOTE: Rendering is only supported if the remote environment was initiated with `enable_rendering=True`
         """
 
         def convert_to_space(spec: specs.Array) -> Space:
