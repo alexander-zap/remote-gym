@@ -32,7 +32,7 @@ class RemoteArgs(TypedDict):
         * `env_id` is a unique identifier for the environment, used for non-sharable resources.
         * `kwargs` are any additional kwargs, including entrypoint_kwargs passed from the RemoteEnvironment
 
-        The server may add additional fields (such as `end_id`).
+        The server may add additional fields (such as `env_id`).
         To remain forward-compatible, use **kwargs to dismiss unused fields!
 
 
