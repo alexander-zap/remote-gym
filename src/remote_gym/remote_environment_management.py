@@ -339,12 +339,7 @@ class ProcessedEnv:
 class RemoteEnvironmentServicer(dm_env_rpc_pb2_grpc.EnvironmentServicer):
     """Runs the environment as a gRPC EnvironmentServicer."""
 
-    def __init__(
-        self,
-        default_args: RemoteArgs,
-        use_thread: bool,
-        max_concurrent_environments: int = 1024,
-    ):
+    def __init__(self, default_args: RemoteArgs, use_thread: bool, max_concurrent_environments: int = 1024):
         self.default_args = default_args
         self.use_thread = use_thread
         self.environments = {}
