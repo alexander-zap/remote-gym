@@ -37,6 +37,12 @@ if __name__ == "__main__":
         default=False,
     )
     parser.add_argument(
+        "--use_thread",
+        action="store_true",
+        help="Use threads rather than processes.",
+        default=False,
+    )
+    parser.add_argument(
         "--server_certificate",
         type=str,
         help="Path to the self-signed server certificate (for TLS authentication)",  # server.pem
@@ -59,7 +65,6 @@ if __name__ == "__main__":
     url = args.url
     port = args.port
     server_credentials_paths = (args.server_certificate, args.server_private_key, args.root_certificate)
-    enable_rendering = args.enable_rendering
 
     server = create_remote_environment_server(
         default_args={
@@ -75,7 +80,8 @@ if __name__ == "__main__":
         url=url,
         port=port,
         server_credentials_paths=server_credentials_paths if any(server_credentials_paths) else None,
-        enable_rendering=enable_rendering,
+        enable_rendering=args.enable_rendering,
+        use_thread=args.use_thread,
     )
 
     try:
