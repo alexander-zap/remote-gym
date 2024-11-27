@@ -13,8 +13,6 @@ def test_readme():
         },
         url="localhost",
         port=12345,
-        enable_rendering=False,
-        use_thread=False,
     )
 
     # Start environment
