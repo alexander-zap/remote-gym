@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "remote-gym"
-version = "0.4.0"
+version = "0.5.0"
 description = "This is a module to run Gym environments remotely, to enable splitting environment hosting and agent training into separate processes (or even separate machines)."
 authors = ["Alexander Zap"]
 license = "Proprietary"
@@ -10,9 +10,9 @@ packages = [
 include = ["src/remote_gym/res/*"]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<3.11"
+python = ">=3.8,<3.11"
 setuptools = "^68.0"
-gymnasium = "^0.28.1"
+gymnasium = "^0.29.0"
 gym = "^0.26.2"
 protobuf = ">=3.20, <5"
 dm-env-rpc = "^1.1.6"
