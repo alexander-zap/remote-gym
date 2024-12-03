@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, Optional, SupportsFloat, Text, Tuple, TypedDict
+from typing import Dict, Optional, SupportsFloat, Text, Tuple
 
 import cv2
 import grpc
@@ -10,6 +10,11 @@ from dm_env_rpc.v1 import connection as dm_env_rpc_connection
 from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
+
+try:
+    from typing import TypedDict
+except ImportError:
+    from typing_extensions import TypedDict
 
 
 class RemoteArgs(TypedDict):
