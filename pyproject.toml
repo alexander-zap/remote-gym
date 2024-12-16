@@ -1,18 +1,40 @@
 [tool.poetry]
 name = "remote-gym"
-version = "0.5.0"
+version = "0.6.0"
 description = "This is a module to run Gym environments remotely, to enable splitting environment hosting and agent training into separate processes (or even separate machines)."
+homepage = "https://github.com/alexander-zap/remote-gym"
 authors = ["Alexander Zap"]
-license = "Proprietary"
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+license = "MIT License"
 packages = [
     { include = "remote_gym", from = "src" },
 ]
 include = ["src/remote_gym/res/*"]
+keywords = [
+    "reinforcement learning",
+    "rl",
+    "imitation learning",
+    "gym",
+    "gymnasium",
+    "dm_env",
+]
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
-setuptools = "^75.6.0"
+setuptools = "^68.0"
 gymnasium = "^0.29.0"
 gym = "^0.26.2"
 protobuf = ">=3.20, <5"
@@ -31,7 +53,7 @@ gym = { version = "^0.26.2", extras = ["classic-control"] }
 [tool.poetry.group.dev.dependencies]
 black = "^23.3"
 pre-commit = "^2.21.0"
-ruff = "^0.1.6"
+ruff = "^0.8.3"
 
 [build-system]
 requires = ["poetry-core>=1.9.0"]
@@ -103,3 +125,12 @@ exclude = '''
   | dist
 )/
 '''
+
+[tool.yamlfix]
+line_length = 89
+preserve_quotes = false
+quote_basic_values = false
+quote_representation = "'"
+section_whitelines = 1
+sequence_style = "block_style"
+whitelines = 1
