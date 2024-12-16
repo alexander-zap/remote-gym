@@ -5,10 +5,10 @@ Communication between the two processes is executed by using TLS and the gRPC pr
 
 Adapted `dm_env_rpc` for `Gym.env` environments.
 
-
 ## Usage
 
 ### Main Features
+
 - Use the `create_remote_environment_server` method to start a `Gym.env` environment as a remotely running environment.
 - Use the `RemoteEnvironment` class to manage the connection to a remotely running environment (from `create_remote_environment_server`) and provide the standardized `Gym.env` interface to your agents through a `RemoteEnvironment` object.
 - Basically: `remote-gym` is to `Gym.env` as what `dm_env_rpc` is to `dm_env`.
@@ -57,6 +57,7 @@ def create_environment(enable_rendering: bool, env_id: int, **kwargs) -> gym.Env
 ```
 
 Second process:
+
 ```py
 from remote_gym import RemoteEnvironment
 
@@ -92,14 +93,16 @@ The `render_mode` of the hosted environment should be controlled by the `entrypo
 
 To set up your local development environment, please run:
 
-    poetry install
+```
+poetry install
+```
 
 Behind the scenes, this creates a virtual environment and installs `remote_gym` along with its dependencies into a new virtualenv. Whenever you run `poetry run <command>`, that `<command>` is actually run inside the virtualenv managed by poetry.
 
 You can now import functions and classes from the module with `import remote_gym`.
 
-
 ### Set-up for connecting the agent training process to remote environments running on a separate machine
+
 Authenticating the communication channel via the connection of one machine to the other requires TLS (formerly SSL)
 authentication.
 This is achieved by using a [self-signed certificate](https://en.wikipedia.org/wiki/Self-signed_certificate),
@@ -111,19 +114,21 @@ All required configuration files to create a self-signed certificate chain can b
 
 1. The root certificate of the certificate authority (`ca.pem`) is created by following command:
 
-       cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+   ```
+   cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+   ```
 
+1. The server certificate (`server.pem`) and respective private key (`server-key.pem`) is created by following command:
 
-2. The server certificate (`server.pem`) and respective private key (`server-key.pem`) is created by following command:
-
-       cfssl gencert -ca="ca.pem" -ca-key="ca-key.pem" -config="ca-config.json" server-csr.json | cfssljson -bare server
+   ```
+   cfssl gencert -ca="ca.pem" -ca-key="ca-key.pem" -config="ca-config.json" server-csr.json | cfssljson -bare server
+   ```
 
 Make sure to add all known hostnames of the machine hosting the remote environment. You can now test, whether the
 client is able to connect to the server by running both example scripts.
 
-   - [`start_remote_environment`](/exploration/start_remote_environment.py) `-u SERVER.IP.HERE -p 56765  --server_certificate path\to\server.pem --server_private_key path\to\server-key.pem`
-   - [`start_environment_interaction`](/exploration/start_environment_interaction.py) `-u SERVER.IP.HERE -p 56765 --root_certificate path\to\ca.pem`
-
+- [`start_remote_environment`](/exploration/start_remote_environment.py) `-u SERVER.IP.HERE -p 56765  --server_certificate path\to\server.pem --server_private_key path\to\server-key.pem`
+- [`start_environment_interaction`](/exploration/start_environment_interaction.py) `-u SERVER.IP.HERE -p 56765 --root_certificate path\to\ca.pem`
 
 If the connection is not successful and the training is not starting, you can investigate on the server
 (remote environment hosting machine) which IP is unsuccessfully attempting a TLS authentication to your IP by using
@@ -131,21 +136,18 @@ the [Wireshark tool](https://www.wireshark.org/download.html) with the filter `t
 
 Afterward you can add this IP to your hostnames to the [server SSL config file](/ssl/server-csr.json).
 
-
 3. Optional for client authentication on the machine connecting to the remote environment:
 
-    Create a client certificate (`client.pem`) and respective private key `client-key.pem` by running following command:
+   Create a client certificate (`client.pem`) and respective private key `client-key.pem` by running following command:
 
-       cfssl gencert -ca="ca.pem" -ca-key="ca-key.pem" -config="ca-config.json" client-csr.json | cfssljson -bare client
+   ```
+   cfssl gencert -ca="ca.pem" -ca-key="ca-key.pem" -config="ca-config.json" client-csr.json | cfssljson -bare client
+   ```
 
 Then you can use all certificates and keys:
 
-   - [`start_remote_environment`](/exploration/start_remote_environment.py) `-u SERVER.IP.HERE -p 56765  --root_certificate path\to\ca.pem --server_certificate path\to\server.pem --server_private_key path\to\server-key.pem`
-   - [`start_environment_interaction`](/exploration/start_environment_interaction.py) `-u SERVER.IP.HERE -p 56765 --root_certificate path\to\ca.pem --client_certificate path\to\client.pem --client_private_key path\to\client-key.pem`
-
-
-
-
+- [`start_remote_environment`](/exploration/start_remote_environment.py) `-u SERVER.IP.HERE -p 56765  --root_certificate path\to\ca.pem --server_certificate path\to\server.pem --server_private_key path\to\server-key.pem`
+- [`start_environment_interaction`](/exploration/start_environment_interaction.py) `-u SERVER.IP.HERE -p 56765 --root_certificate path\to\ca.pem --client_certificate path\to\client.pem --client_private_key path\to\client-key.pem`
 
 ## Development
 
@@ -153,18 +155,24 @@ Then you can use all certificates and keys:
 
 You can use your module code (`src/`) in Jupyter notebooks without running into import errors by running:
 
-    poetry run jupyter notebook
+```
+poetry run jupyter notebook
+```
 
 or
 
-    poetry run jupyter-lab
+```
+poetry run jupyter-lab
+```
 
 This starts the jupyter server inside the project's virtualenv.
 
 Assuming you already have Jupyter installed, you can make your virtual environment available as a separate kernel by running:
 
-    poetry add ipykernel
-    poetry run python -m ipykernel install --user --name="remote-gym"
+```
+poetry add ipykernel
+poetry run python -m ipykernel install --user --name="remote-gym"
+```
 
 Note that we mainly use notebooks for experiments, visualizations and reports. Every piece of functionality that is meant to be reused should go into module code and be imported into notebooks.
 
@@ -172,8 +180,10 @@ Note that we mainly use notebooks for experiments, visualizations and reports. E
 
 Before contributing, please set up the pre-commit hooks to reduce errors and ensure consistency
 
-    pip install -U pre-commit
-    pre-commit install
+```
+pip install -U pre-commit
+pre-commit install
+```
 
 If you run into any issues, you can remove the hooks again with `pre-commit uninstall`.
 

@@ -8,17 +8,18 @@ packages = [
     { include = "remote_gym", from = "src" },
 ]
 include = ["src/remote_gym/res/*"]
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.11"
-setuptools = "^68.0"
+setuptools = "^75.6.0"
 gymnasium = "^0.29.0"
 gym = "^0.26.2"
 protobuf = ">=3.20, <5"
 dm-env-rpc = "^1.1.6"
 opencv-python = "^4.9.0.80"
-gitpython = "^3.1.43"
 fasteners = "^0.19"
+gitpython = "^3.1.43"
 psutil = "^6.0.0"
 
 [tool.poetry.group.test.dependencies]
@@ -33,7 +34,7 @@ pre-commit = "^2.21.0"
 ruff = "^0.1.6"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=1.9.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
