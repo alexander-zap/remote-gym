@@ -254,12 +254,14 @@ class RemoteEnvironment(Env):
     def _connect_to_remote_environment(
         self,
     ) -> Tuple[dm_env_adaptor.dm_env_rpc_connection.Connection, dm_env_adaptor.DmEnvAdaptor]:
-        def create_channel_credentials() -> grpc.ChannelCredentials:
+
+        def create_channel_connection() -> dm_env_adaptor.dm_env_rpc_connection.Connection:
             """Create client credentials based on given paths in self.client_credentials_paths.
 
-            :return: client_credentials (grpc.ChannelCredentials): Credentials used to connect to the remote machine
-                running the actual environment. Returns credentials for localhost, if no paths are specified.
+            :return: connection (dm_env_adaptor.dm_env_rpc_connection.Connection):
+                Channel connection, secure on insecure to remote host.
             """
+            server_address = f'{self.url}:{self.port}'
             if self.client_credentials_paths:
                 root_cert_path, client_cert_path, client_private_key_path = self.client_credentials_paths
                 root_cert = open(root_cert_path, "rb").read()
@@ -275,25 +277,21 @@ class RemoteEnvironment(Env):
                     f"Connecting securely to port on {self.url}:{self.port}. "
                     f"Client authentication is {'ATTEMPTED' if client_authentication else 'OMITTED'}."
                 )
-            else:
-                client_credentials = grpc.local_channel_credentials()
-                logging.info(
-                    f"Connecting securely to port on {self.url}:{self.port}. "
-                    f"SSL credentials were not provided, therefore can only connect to local servers."
+                return dm_env_rpc_connection.create_secure_channel_and_connect(
+                    server_address, client_credentials,
                 )
 
-            return client_credentials
+            logging.info(f'Connecting insecurely to port on {self.url}:{self.port}.')
+            return dm_env_rpc_connection.create_insecure_channel_and_connect(
+                server_address,
+            )
 
-        server_address = f"{self.url}:{self.port}"
-        connection = dm_env_rpc_connection.create_secure_channel_and_connect(
-            server_address, create_channel_credentials()
-        )
-        remote_environment, _ = dm_env_adaptor.create_and_join_world(
+        connection = create_channel_connection()
+        return connection, dm_env_adaptor.create_and_join_world(
             connection,
             create_world_settings={"args": json.dumps(self.remote_args)},
             join_world_settings={},
-        )
-        return connection, remote_environment
+        )[0]
 
     def _disconnect_from_remote_environment(self):
         if self.remote_environment:
