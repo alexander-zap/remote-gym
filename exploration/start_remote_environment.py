@@ -61,7 +61,7 @@ if __name__ == "__main__":
     server = create_remote_environment_server(
         default_args={
             # Server options
-            "repo": "git@github.com:Luke100000/remote-gym.git",
+            "repo": "https://github.com/alexander-zap/remote-gym.git",
             "reference": "master",
             "entrypoint": "exploration/remote_environment_entrypoint.py",
             "entrypoint_kwargs": {
