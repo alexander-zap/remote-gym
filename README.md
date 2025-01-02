@@ -103,6 +103,15 @@ You can now import functions and classes from the module with `import remote_gym
 
 ### Set-up for connecting the agent training process to remote environments running on a separate machine
 
+#### Insecure connections
+
+Connections between a client and a server can be established in an insecure way by
+
+- not providing any `server_credential_paths` to `create_remote_environment_server`
+- not providing any `client_credential_paths` to `RemoteEnvironment`
+
+#### Secure connections
+
 Authenticating the communication channel via the connection of one machine to the other requires TLS (formerly SSL)
 authentication.
 This is achieved by using a [self-signed certificate](https://en.wikipedia.org/wiki/Self-signed_certificate),

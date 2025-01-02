@@ -11,6 +11,8 @@ from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
 
+from remote_gym.dm_env_rpc_connection_util import create_insecure_channel_and_connect
+
 
 class RemoteArgs(TypedDict):
     """
@@ -254,14 +256,15 @@ class RemoteEnvironment(Env):
     def _connect_to_remote_environment(
         self,
     ) -> Tuple[dm_env_adaptor.dm_env_rpc_connection.Connection, dm_env_adaptor.DmEnvAdaptor]:
-
         def create_channel_connection() -> dm_env_adaptor.dm_env_rpc_connection.Connection:
-            """Create client credentials based on given paths in self.client_credentials_paths.
+            """Create secure channel connection based on given paths in self.client_credentials_paths.
+                Without credentials a secure channel connection is only possible on localhost.
+                Otherwise, an insecure channel connection will be established.
 
             :return: connection (dm_env_adaptor.dm_env_rpc_connection.Connection):
-                Channel connection, secure on insecure to remote host.
+                Channel connection to remote host, secure or insecure.
             """
-            server_address = f'{self.url}:{self.port}'
+            server_address = f"{self.url}:{self.port}"
             if self.client_credentials_paths:
                 root_cert_path, client_cert_path, client_private_key_path = self.client_credentials_paths
                 root_cert = open(root_cert_path, "rb").read()
@@ -277,21 +280,33 @@ class RemoteEnvironment(Env):
                     f"Connecting securely to port on {self.url}:{self.port}. "
                     f"Client authentication is {'ATTEMPTED' if client_authentication else 'OMITTED'}."
                 )
-                return dm_env_rpc_connection.create_secure_channel_and_connect(
-                    server_address, client_credentials,
+                connection = dm_env_rpc_connection.create_secure_channel_and_connect(
+                    server_address,
+                    client_credentials,
                 )
+            elif self.url in ["localhost", "127.0.0.1"]:
+                client_credentials = grpc.local_channel_credentials()
+                logging.info(
+                    f"Connecting securely to port on {self.url}:{self.port}. "
+                    f"SSL credentials were not provided, but attempting secure channel due to URL being localhost."
+                )
+                connection = dm_env_rpc_connection.create_secure_channel_and_connect(
+                    server_address,
+                    client_credentials,
+                )
+            else:
+                logging.info(f"Connecting insecurely to port on {self.url}:{self.port}.")
+                connection = create_insecure_channel_and_connect(server_address)
 
-            logging.info(f'Connecting insecurely to port on {self.url}:{self.port}.')
-            return dm_env_rpc_connection.create_insecure_channel_and_connect(
-                server_address,
-            )
+            return connection
 
         connection = create_channel_connection()
-        return connection, dm_env_adaptor.create_and_join_world(
-            connection,
+        remote_environment, _ = dm_env_adaptor.create_and_join_world(
+            connection=connection,
             create_world_settings={"args": json.dumps(self.remote_args)},
             join_world_settings={},
-        )[0]
+        )
+        return connection, remote_environment
 
     def _disconnect_from_remote_environment(self):
         if self.remote_environment:

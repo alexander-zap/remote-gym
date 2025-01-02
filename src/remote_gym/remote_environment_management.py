@@ -85,11 +85,17 @@ def create_remote_environment_server(
             f"Opening secure port on {url}:{port}. "
             f"Client authentication {'REQUIRED' if client_authentication_required else 'OPTIONAL'}."
         )
-        assigned_port = server.add_secure_port(f'{url}:{port}', server_credentials)
-
+        assigned_port = server.add_secure_port(f"{url}:{port}", server_credentials)
+    elif url in ["localhost", "127.0.0.1"]:
+        server_credentials = grpc.local_server_credentials()
+        logging.info(
+            f"Opening secure port on {url}:{port}. "
+            f"SSL credentials were not provided, but secure local connections can be established without credentials."
+        )
+        assigned_port = server.add_secure_port(f"{url}:{port}", server_credentials)
     else:
-        logging.info(f'Opening insecure port on {url}:{port}.')
-        assigned_port = server.add_insecure_port(f'{url}:{port}')
+        logging.info(f"Opening insecure port on {url}:{port}.")
+        assigned_port = server.add_insecure_port(f"{url}:{port}")
 
     assert assigned_port == port
     server.start()
@@ -183,7 +189,7 @@ def run_env_loop(
 ):
     try:
         env = create_gym_environment(args)
-        logging.info('{}({})'.format(env, args))
+        logging.info("{}({})".format(env, args))
 
         action_spec = {
             1: dm_env_rpc_pb2.TensorSpec(
