@@ -11,8 +11,6 @@ from dm_env_rpc.v1 import dm_env_adaptor
 from gymnasium import Env
 from gymnasium.spaces import Box, Discrete, MultiDiscrete, Space
 
-from remote_gym.dm_env_rpc_connection_util import create_insecure_channel_and_connect
-
 
 class RemoteArgs(TypedDict):
     """
@@ -295,8 +293,9 @@ class RemoteEnvironment(Env):
                     client_credentials,
                 )
             else:
-                logging.info(f"Connecting insecurely to port on {self.url}:{self.port}.")
-                connection = create_insecure_channel_and_connect(server_address)
+                client_credentials = grpc.ssl_channel_credentials()
+                logging.info(f"Connecting (in)securely to port on {self.url}:{self.port}.")
+                connection = dm_env_rpc_connection.create_secure_channel_and_connect(server_address, client_credentials)
 
             return connection
 
