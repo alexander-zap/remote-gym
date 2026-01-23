@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "remote-gym"
-version = "0.7.1"
+version = "0.7.2"
 description = "This is a module to run Gym environments remotely, to enable splitting environment hosting and agent training into separate processes (or even separate machines)."
 homepage = "https://github.com/alexander-zap/remote-gym"
 authors = ["Alexander Zap"]
@@ -23,8 +23,9 @@ packages = [
 ]
 include = ["src/remote_gym/res/*"]
 keywords = [
-    "reinforcement learning",
     "rl",
+    "reinforcement learning",
+    "offline reinforcement learning",
     "imitation learning",
     "gym",
     "gymnasium",
@@ -33,9 +34,8 @@ keywords = [
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.12"
-setuptools = "^68.0"
-gymnasium = "^0.29.0"
+python = ">=3.8,<3.13"
+gymnasium = ">=0.25.0"
 gym = "^0.26.2"
 protobuf = ">=3.20, <5"
 dm-env-rpc = "^1.1.6"
