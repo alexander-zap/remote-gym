@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "remote-gym"
-version = "0.7.2"
+version = "0.7.3"
 description = "This is a module to run Gym environments remotely, to enable splitting environment hosting and agent training into separate processes (or even separate machines)."
 homepage = "https://github.com/alexander-zap/remote-gym"
 authors = ["Alexander Zap"]
@@ -36,7 +36,6 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.8,<3.13"
 gymnasium = ">=0.25.0"
-gym = "^0.26.2"
 protobuf = ">=3.20, <5"
 dm-env-rpc = "^1.1.6"
 opencv-python = "^4.9.0.80"
@@ -48,7 +47,6 @@ psutil = "^6.0.0"
 pytest = "^7.2"
 pytest-cov = "^4.0"
 tqdm = "^4.66.1"
-gym = { version = "^0.26.2", extras = ["classic-control"] }
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3"

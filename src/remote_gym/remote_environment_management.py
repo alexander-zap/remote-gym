@@ -8,10 +8,9 @@ import traceback
 from concurrent import futures
 from pathlib import Path
 from threading import Thread
-from typing import Optional, Text, Tuple, Union
+from typing import Optional, Text, Tuple
 
 import grpc
-import gym
 import gymnasium
 import numpy as np
 import psutil
@@ -105,11 +104,11 @@ def create_remote_environment_server(
     return server
 
 
-def space_to_dtype(space: Union[gym.Space, gymnasium.Space]) -> dm_env_rpc_pb2.DataType:
+def space_to_dtype(space: gymnasium.Space) -> dm_env_rpc_pb2.DataType:
     """Extract the dm_env_rpc_pb2 data type from the Gym Space.
 
     Args:
-        space: Gym or Gymnasium Space object for definition of observation spaces
+        space: Gymnasium Space object for definition of observation spaces
 
     Returns:
         dtype of the TensorSpec
@@ -130,20 +129,20 @@ def space_to_dtype(space: Union[gym.Space, gymnasium.Space]) -> dm_env_rpc_pb2.D
     return dtype
 
 
-def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
+def space_to_bounds(space: gymnasium.Space) -> Tuple:
     """Extract the upper and lower bounds of the Gym space.
 
     Args:
-        space: Gym or Gymnasium Space object for definition of observation spaces
+        space: Gymnasium Space object for definition of observation spaces
 
     Returns:
         Tuple (lower and upper and lower bounds of Gym space in the shape of the Gym shape)
     """
-    if isinstance(space, gym.spaces.Discrete) or isinstance(space, gymnasium.spaces.Discrete):
+    if isinstance(space, gymnasium.spaces.Discrete):
         return space.start, space.start + space.n - 1
-    elif isinstance(space, gym.spaces.Box) or isinstance(space, gymnasium.spaces.Box):
+    elif isinstance(space, gymnasium.spaces.Box):
         return space.low, space.high
-    elif isinstance(space, gym.spaces.MultiDiscrete) or isinstance(space, gymnasium.spaces.MultiDiscrete):
+    elif isinstance(space, gymnasium.spaces.MultiDiscrete):
         low = [discrete_space.start for discrete_space in space]
         high = [discrete_space.start + discrete_space.n - 1 for discrete_space in space]
         return low, high
@@ -155,7 +154,7 @@ def space_to_bounds(space: Union[gym.Space, gymnasium.Space]) -> Tuple:
         raise ValueError
 
 
-def create_gym_environment(args: RemoteArgs) -> Union[gym.Env, gymnasium.Env]:
+def create_gym_environment(args: RemoteArgs) -> gymnasium.Env:
     # Clone the given repository
     repo = args.get("repo", None)
     reference = args.get("reference", None)
